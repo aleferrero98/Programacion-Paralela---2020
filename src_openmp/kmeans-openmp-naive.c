@@ -6,7 +6,8 @@
  * @date 26/05/2021
  */
 
-#include "kmeans-serie.h"
+#include "kmeans-openmp-naive.h"
+#include <omp.h>
 
 int main() {
    // double cMin,cMax;
@@ -38,15 +39,20 @@ double** FindClusters(double *items, u_int64_t *belongsTo, u_int64_t cantItems){
     double **clusters = (double **) malloc(CANT_MEANS * sizeof(double*));
     int indices[CANT_MEANS];
     
-    for(int n = 0; n < CANT_MEANS; n++){
-        clusters[n] = (double *) malloc(cantItems * sizeof(double));
-        indices[n] = 0;
-    }
+    #pragma omp parallel num_threads(NUM_THREADS) 
+    {
+        #pragma omp for schedule(dynamic) 
+        for(int n = 0; n < CANT_MEANS; n++){
+            clusters[n] = (double *) malloc(cantItems * sizeof(double));
+            indices[n] = 0;
+        }
 
-    for(u_int64_t i = 0; i < cantItems; i++){
-        clusters[belongsTo[i]][indices[belongsTo[i]]] = items[i];
-        indices[belongsTo[i]]++;
-        //printf("belong: %lu\n", belongsTo[i]);
+        #pragma omp for schedule(dynamic)
+        for(u_int64_t i = 0; i < cantItems; i++){
+            clusters[belongsTo[i]][indices[belongsTo[i]]] = items[i];
+            indices[belongsTo[i]]++;
+            //printf("belong: %lu\n", belongsTo[i]);
+        }
     }
 
     return clusters;
@@ -276,15 +282,38 @@ void searchMinMax(const double * items, u_int64_t size_lines, double* cMin,doubl
     double maximal = DBL_MIN;
     //Define el minimo como el maximo valor de tipo DOUBLE
     double minimal = DBL_MAX;
+    int id;
+
+    double minimos[NUM_THREADS];
+    double maximos[NUM_THREADS];
     
-    for(u_int64_t i = 0; i < size_lines; i++){
-        if(items[i] > maximal){
-            maximal = items[i];
+    #pragma omp parallel num_threads(NUM_THREADS)
+    {
+        id = omp_get_thread_num();
+        #pragma omp for first_private(minimal, maximal)
+        for(u_int64_t i = 0; i < size_lines; i++){
+            if(items[i] > maximal){
+                maximal = items[i];
+            }
+            if(items[i] < minimal){
+                minimal = items[i];
+            }
         }
-        if(items[i] < minimal){
-            minimal = items[i];
+        minimos[id] = minimal;
+        maximos[id] = maximal;
+    }
+    maximal = maximos[0];
+    minimal = minimos[0];
+
+    for(int i = 1; i < NUM_THREADS; i++){
+        if(maximos[i] > maximal){
+            maximal = maximos[i];
+        }
+        if(minimos[i] < minimal){
+            minimal = minimos[i];
         }
     }
+
     *cMin = minimal;
     *cMax = maximal;
 }

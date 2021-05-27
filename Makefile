@@ -16,23 +16,29 @@ BIN_MPI=kmeans_mpi
 KMEANS_CUDA=kmeans-cuda
 BIN_CUDA=kmeans_cuda
 
+#Implementaciones
+IMPLEMENTACION=naive
+#IMPLEMENTACION=efficient
+
 # Opt de compilacion 
 CC=gcc
 PROFILER= scorep --openmp #--verbose
 CFLAGS= -g -Wall -pedantic -Wextra -Wconversion -march=native -O0 #-Werror
-OPENMP= -fopenmp
 
-all: kmeans_serie kmeans_openmp kmeans_mpi kmeans_cuda doc
+all: kmeans_serie kmeans_openmp #kmeans_mpi kmeans_cuda doc
 
 kmeans_serie: $(SOURCE_SERIE)/$(KMEANS_SERIE).c  $(SOURCE_SERIE)/$(KMEANS_SERIE).h
 	mkdir -p $(BINARY_DIR)
 	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_SERIE) $(SOURCE_SERIE)/$(KMEANS_SERIE).c -lm
 
-kmeans_openmp:
+kmeans_openmp: $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).h
+	mkdir -p $(BINARY_DIR)
+	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION) $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
+	$(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION) $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 
-kmeans_mpi:
+#kmeans_mpi:
 
-kmeans_cuda:
+#kmeans_cuda:
 
 doc: Doxyfile
 	mkdir -p $(DOC_DIR)

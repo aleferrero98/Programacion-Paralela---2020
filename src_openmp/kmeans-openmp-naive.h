@@ -23,6 +23,8 @@
 #define FALSE 0
 #define CANT_MEANS 4
 #define CANT_ITERACIONES 100
+#define NUM_THREADS 2
+#define CHUNK 0  //tamaño en el que se divide el trabajo en un bucle for
 
 u_int64_t CalcLines(char filename[50]);
 double * ReadData(char filename[50],u_int64_t size_lines);
