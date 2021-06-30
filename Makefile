@@ -1,10 +1,10 @@
 # Directorios
-SOURCE_SERIE=src_serie
-SOURCE_OPENMP=src_openmp
-SOURCE_MPI=src_mpi
-SOURCE_CUDA=src_cuda
 BINARY_DIR=bin
 DOC_DIR=documentacion
+SERIE_DIR=serie
+OPENMP_DIR=openMP
+MPI_DIR=MPI
+CUDA_DIR=CUDA
 
 #Binarios
 KMEANS_SERIE=kmeans-serie
@@ -25,20 +25,20 @@ CC=gcc
 PROFILER= scorep --openmp #--verbose
 CFLAGS= -g -Wall -pedantic -Wextra -Wconversion -march=native -O0 #-Werror
 
-all: kmeans_serie kmeans_openmp #kmeans_mpi kmeans_cuda doc
+all: serie_kmeans openmp_kmeans #mpi_kmeans cuda_kmeans doc
 
-kmeans_serie: $(SOURCE_SERIE)/$(KMEANS_SERIE).c  $(SOURCE_SERIE)/$(KMEANS_SERIE).h
-	mkdir -p $(BINARY_DIR)
-	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_SERIE) $(SOURCE_SERIE)/$(KMEANS_SERIE).c -lm
+serie_kmeans: $(SERIE_DIR)/$(KMEANS_SERIE).c  $(SERIE_DIR)/$(KMEANS_SERIE).h
+	mkdir -p $(BINARY_DIR)/$(SERIE_DIR)
+	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(SERIE_DIR)/$(BIN_SERIE) $(SERIE_DIR)/$(KMEANS_SERIE).c -lm -fopenmp
 
-kmeans_openmp: $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).h
-	mkdir -p $(BINARY_DIR)
-	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION) $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
-	$(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION) $(SOURCE_OPENMP)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
+openmp_kmeans: $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).h
+	mkdir -p $(BINARY_DIR)/$(OPENMP_DIR)
+	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
+# $(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 
-#kmeans_mpi:
+#mpi_kmeans:
 
-#kmeans_cuda:
+#cuda_kmeans:
 
 doc: Doxyfile
 	mkdir -p $(DOC_DIR)

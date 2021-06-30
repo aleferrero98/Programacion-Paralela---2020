@@ -18,11 +18,14 @@
 
 #define TAM_STRING 50
 #define PATH "./inputs/movisA.csv"
-#define PATH_2 "./inputs/movisB.csv"
+//#define PATH "./inputs/randomData.csv"
+//#define PATH_2 "./inputs/movisB.csv"
 #define TRUE 1
 #define FALSE 0
 #define CANT_MEANS 4
-#define CANT_ITERACIONES 100
+#define CANT_ITERACIONES 10000
+#define NUM_THREADS 2
+#define CHUNK 0  //tamaño en el que se divide el trabajo en un bucle for
 
 u_int64_t CalcLines(char filename[50]);
 double * ReadData(char filename[50],u_int64_t size_lines);

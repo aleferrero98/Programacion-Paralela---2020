@@ -6,20 +6,22 @@
  * @date 26/05/2021
  */
 
-#include "kmeans-openmp-naive.h"
-#include <omp.h>
+#include "kmeans-serie.h"
+#include <omp.h> //para la funcion omp_get_wtime
 
 int main() {
+    double start, end; 
+
+    start = omp_get_wtime(); 
    // double cMin,cMax;
     double **clusters;
     u_int64_t* belongsTo;  //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     u_int64_t size_lines = CalcLines(PATH);
-    double* items = ReadData(PATH,size_lines);
+    double* items = ReadData(PATH, size_lines);
 
     //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     belongsTo = calloc(size_lines, sizeof(u_int64_t));
     
-    printf("Primera Muestra\n");
     double* means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, size_lines, belongsTo);
     clusters = FindClusters(items, belongsTo, size_lines);
     
@@ -30,8 +32,12 @@ int main() {
     free(belongsTo);
     free(means);
     free(items);
+
+    end = omp_get_wtime(); 
+    printf("\033[1;33m >>> Ejecución algoritmo K-means Serie <<<\033[0;37m \n");
+    printf("Duración total del programa: %f seg\n", end - start);
     
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 double** FindClusters(double *items, u_int64_t *belongsTo, u_int64_t cantItems){
@@ -39,20 +45,15 @@ double** FindClusters(double *items, u_int64_t *belongsTo, u_int64_t cantItems){
     double **clusters = (double **) malloc(CANT_MEANS * sizeof(double*));
     int indices[CANT_MEANS];
     
-    #pragma omp parallel num_threads(NUM_THREADS) 
-    {
-        #pragma omp for schedule(dynamic) 
-        for(int n = 0; n < CANT_MEANS; n++){
-            clusters[n] = (double *) malloc(cantItems * sizeof(double));
-            indices[n] = 0;
-        }
+    for(int n = 0; n < CANT_MEANS; n++){
+        clusters[n] = (double *) malloc(cantItems * sizeof(double));
+        indices[n] = 0;
+    }
 
-        #pragma omp for schedule(dynamic)
-        for(u_int64_t i = 0; i < cantItems; i++){
-            clusters[belongsTo[i]][indices[belongsTo[i]]] = items[i];
-            indices[belongsTo[i]]++;
-            //printf("belong: %lu\n", belongsTo[i]);
-        }
+    for(u_int64_t i = 0; i < cantItems; i++){
+        clusters[belongsTo[i]][indices[belongsTo[i]]] = items[i];
+        indices[belongsTo[i]]++;
+        //printf("belong: %lu\n", belongsTo[i]);
     }
 
     return clusters;
@@ -61,7 +62,7 @@ double** FindClusters(double *items, u_int64_t *belongsTo, u_int64_t cantItems){
 double* CalculateMeans(u_int16_t cantMeans, double* items, int cantIterations, u_int64_t size_lines, u_int64_t* belongsTo){
     //Encuentra el minimo y maximo de la columna
     double cMin,cMax;
-    searchMinMax(items,size_lines,&cMin,&cMax);
+    searchMinMax(items, size_lines, &cMin, &cMax);
     //double cMin = searchMin(items,size_lines);
     //double cMax = searchMax(items,size_lines);
 
@@ -69,7 +70,7 @@ double* CalculateMeans(u_int16_t cantMeans, double* items, int cantIterations, u
     u_int64_t countChangeItem;
 
     //Definicion de variables
-    int noChange;
+    int noChange, j;
     double item;
     u_int64_t cSize, index;
 
@@ -83,7 +84,7 @@ double* CalculateMeans(u_int16_t cantMeans, double* items, int cantIterations, u
     //belongsTo = calloc(size_lines, sizeof(u_int64_t));
 
     //Calcula las medias
-    for (int j = 0; j < cantIterations; j++) {
+    for (j = 0; j < cantIterations; j++) {
         
         //Si no ocurrio un cambio en el cluster, se detiene
         noChange = TRUE;
@@ -124,10 +125,20 @@ double* CalculateMeans(u_int16_t cantMeans, double* items, int cantIterations, u
         }*/
 
         //printf("countChangeItem: %lu - minPorcentaje: %lf\n",countChangeItem, minPorcentaje);
-        if(noChange || (countChangeItem < minPorcentaje)){
+        /*if(noChange || (countChangeItem < minPorcentaje)){
+            break;
+        }*/
+        if(noChange){
             break;
         }
     }
+
+    printf(">>> Cantidad de items en cada cluster <<<\n");
+    for (int m = 0; m < cantMeans; m++) {
+        printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
+    }
+    printf("Cantidad de iteraciones: %d\n", j);
+
     free(clusterSizes);
    // free(belongsTo);
     return means;
@@ -189,12 +200,14 @@ double* ReadData(char filename[50], u_int64_t size_lines){
         char *item = strstr(line,",");
         item++;
         if(item != NULL && strcmp(item,"values\n") && strcmp(item,"\n")){ //Para recortar la cadena y tomar solo el segundo dato
+           // item[strlen(item)-1] = '\0';
             feature = strtod(item,&ptr); //Pasaje a double
             items[i] = feature; //Almacenamiento en item
-            //printf("item[%lu]: %.16f\n",i,items[i]);
+           // if(i == 0 || i == 1 || i == 2 || i == 3) printf("item[%lu]: %.16f\n",i,items[i]);
             i++;
         }
     }
+
     free(line);
     fclose(f);
 
@@ -226,6 +239,7 @@ double* InitializeMeans(u_int16_t cantMeans, double cMin, double cMax){
     */
     for(int i = 0; i < cantMeans; i++){
         means[i] = cMin + (0.5 + i) * jump;
+        printf("Mean[%d]: %lf\n", i, means[i]);
     }
     return means;
 }
@@ -282,38 +296,15 @@ void searchMinMax(const double * items, u_int64_t size_lines, double* cMin,doubl
     double maximal = DBL_MIN;
     //Define el minimo como el maximo valor de tipo DOUBLE
     double minimal = DBL_MAX;
-    int id;
-
-    double minimos[NUM_THREADS];
-    double maximos[NUM_THREADS];
     
-    #pragma omp parallel num_threads(NUM_THREADS)
-    {
-        id = omp_get_thread_num();
-        #pragma omp for first_private(minimal, maximal)
-        for(u_int64_t i = 0; i < size_lines; i++){
-            if(items[i] > maximal){
-                maximal = items[i];
-            }
-            if(items[i] < minimal){
-                minimal = items[i];
-            }
+    for(u_int64_t i = 0; i < size_lines; i++){
+        if(items[i] > maximal){
+            maximal = items[i];
         }
-        minimos[id] = minimal;
-        maximos[id] = maximal;
-    }
-    maximal = maximos[0];
-    minimal = minimos[0];
-
-    for(int i = 1; i < NUM_THREADS; i++){
-        if(maximos[i] > maximal){
-            maximal = maximos[i];
-        }
-        if(minimos[i] < minimal){
-            minimal = minimos[i];
+        if(items[i] < minimal){
+            minimal = items[i];
         }
     }
-
     *cMin = minimal;
     *cMax = maximal;
 }
