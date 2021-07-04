@@ -4,7 +4,7 @@ from random import randint, uniform, random
 CANT_DATOS = 10000000
 NOMBRE_ARCHIVO = 'randomData.csv'
 LIM_INFERIOR = 0
-LIM_SUPERIOR = 50
+LIM_SUPERIOR = 20
 
 file = open(NOMBRE_ARCHIVO, 'w')
 for i in range(0, CANT_DATOS):
