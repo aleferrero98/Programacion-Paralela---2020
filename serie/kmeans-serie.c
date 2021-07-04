@@ -9,15 +9,11 @@
 #include "kmeans-serie.h"
 #include <omp.h> //para la funcion omp_get_wtime
 
-/**
- * @brief
- * @return codigo de retorno al SO
- */
+
 int main(void) {
     double start, end, start2; 
 
     start = omp_get_wtime(); 
-   // double cMin,cMax;
     double ***clusters;
     u_int64_t *belongsTo;  //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     u_int64_t size_lines = CalcLines(PATH);
@@ -29,7 +25,7 @@ int main(void) {
     start2 = omp_get_wtime(); 
     double **means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, size_lines, belongsTo, CANT_FEATURES);
     clusters = FindClusters(items, belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
-    printf("Duración de CalculateMeans + FindClusters: %f seg\n", omp_get_wtime() - start2);
+    printf("Duración de CalculateMeans + FindClusters: %f seg\n\n", omp_get_wtime() - start2);
     
     printf("Valores de las medias finales:\n");
     for(int i = 0; i < CANT_MEANS; i++){
@@ -62,10 +58,6 @@ int main(void) {
     return EXIT_SUCCESS;
 }
 
-/**
- * @brief Creamos una lista de clusters, donde cada cluster es a su vez un arreglo que contiene 
- * todos los items que pertenecen a dicho cluster.
- */
 double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
 
     // clusters es un array de 3 dimensiones, es un conjunto de clusters.
@@ -87,28 +79,11 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
             clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
         }
         indices[belongsTo[i]]++;
-        //printf("belong: %lu\n", belongsTo[i]);
     }
-     printf("%lf %lf", clusters[1][3][0], clusters[1][3][1]);
 
     return clusters;
 }
 
-/**
- * @brief Calcula los valores de la media de cada cluster. Itera por todos los items,
- * los clasifica al cluster mas cercano y actualiza la media del cluster.
- * El algoritmo se repite para un numero fijo de iteraciones y si entre dos iteraciones
- * no hay cambios en la clasificacion de ningun item, se para el proceso (el algoritmo
- * encontro la solucion optima).
- * Es la funcion principal del algoritmo.
- * @param cant_means cantidad de medias o clusters.
- * @param items arreglo de items a clasificar.
- * @param cant_iterations cantidad maxima de iteraciones del algoritmo
- * @param size_lines cantidad de items
- * @param belongsTo array que contiene el numero de cluster al que pertenece cada item
- * @param cant_features cantidad de caracteristicas de los items.
- * @return arreglo de medias de todos los clusters.
- */
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t size_lines, u_int64_t* belongsTo, u_int8_t cant_features){
     //Encuentra el minimo y maximo de cada columna (o feature)
     double *cMin, *cMax;
@@ -130,9 +105,6 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
     //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
     u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
 
-    //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
-    //belongsTo = calloc(size_lines, sizeof(u_int64_t));
-
     //Calcula las medias
     for(j = 0; j < cant_iterations; j++) {
         
@@ -151,10 +123,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 
             clusterSizes[index] += 1;
             cSize = clusterSizes[index]; //cant de items del cluster
-            //printf("Later - Mean[%lu] = %f\n", index,means[index]);
-            //printf("Result:%f\n",updateMean(means[index], item, cSize));
             updateMean(means[index], item, cSize, cant_features);
-            //printf("After - Mean[%lu] = %f\n", index,means[index]);
 
             //si el Item cambio de cluster
             if(index != belongsTo[k]){
@@ -174,12 +143,13 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         }*/
 
         //printf("countChangeItem: %lu - minPorcentaje: %lf\n",countChangeItem, minPorcentaje);
-        /*if(noChange || (countChangeItem < minPorcentaje)){
-            break;
-        }*/
-        if(noChange){
+        if(noChange || (countChangeItem < minPorcentaje)){
             break;
         }
+        /*
+        if(noChange){
+            break;
+        }*/
     }
 
     printf(">>> Cantidad de items en cada cluster <<<\n");
@@ -191,19 +161,11 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
     free(clusterSizes);
     free(cMin);
     free(cMax);
-    //free(item);
-   // free(belongsTo);
+
     return means;
 }
 
-/**
- * @brief Clasifica un item dentro de una media (o cluster), de acuerdo a la distancia euclidiana.
- * @param means arreglo de medias
- * @param item item a clasificar
- * @param cant_means cantidad de medias o clusters 
- * @param cant_features cantidad de caracteristicas de cada item
- * @return el indice de la media a la que se asocio el item.
- */
+
 u_int64_t Classify(double** means, double* item, int cant_means, int cant_features){
     double minimun = DBL_MAX;
     int index = -1;
@@ -220,13 +182,7 @@ u_int64_t Classify(double** means, double* item, int cant_means, int cant_featur
     return (u_int64_t) index;
 }
 
-/**
- * @brief Calcula distancia euclidiana entre dos vectores.
- * @param x primer vector (item)
- * @param y segundo vector (item)
- * @param length longitud del vector
- * @return distancia euclidiana entre ambos vectores.
- */
+
 double distanciaEuclidiana(double* x, double* y, int length){
     double distancia = 0;
     for(int i = 0; i < length; i++){
@@ -236,23 +192,7 @@ double distanciaEuclidiana(double* x, double* y, int length){
     return sqrt(distancia);
 }
 
-/*
-Actualiza el valor de la media. 
-- mean es la media que se va a cambiar,
-- item es el nuevo valor que se quiere introducir en el cluster de esa media,
-- cantItems es la cantidad de item en el cluster de esa media
-mean e item son de 1 dimension (cada item tiene una sola feature)
-Formula: m = (m*(n-1)+x)/n
-no retorna nada porque el puntero se pasa por referencia
-*/
-/**
- * @brief Actualiza el valor de la media incorporando un nuevo item al cluster. 
- * @param mean es la media (arreglo) que se va a actualizar.
- * @param item es el nuevo valor que se quiere introducir en el cluster de esa media.
- * @param cant_items es la cantidad de item en el cluster de esa media.
- * @param cant_features cantidad de caracteristicas de un item.
- * Formula que se aplica para calcular la nueva media: m = (m*(n-1)+x)/n
- */
+
 void updateMean(double* mean, double* item, u_int64_t cant_items, u_int8_t cant_features){
     double m;
 
@@ -263,31 +203,16 @@ void updateMean(double* mean, double* item, u_int64_t cant_items, u_int8_t cant_
     } 
 }
 
-/**
- * @brief redondea un numero de punto flotante a 3 cifras despues de la coma.
- * @param var numero a redondear
- * @return numero con 3 cifras decimales
- * Ejemplo: 37.66666 * 1000 = 37666.66
- * 37666.66 + .5 = 37667.16    for rounding off value
- * then type cast to int so value is 37667
- * then divided by 1000 so the value converted into 37.67
- */
+
 double round(double var){
     double value = (int)(var * 1000 + .5);
     return (double)value / 1000;
 }
 
-/**
- * @brief Lee el archivo indicado y carga el arreglo de items.
- * @param filename string nombre del archivo que contiene los datos
- * @param size_lines cantidad de lineas del archivo
- * @param cant_features cantidad de features de cada item (cantidad de columnas del archivo separadas por comas) 
- * @return arreglo doble con cantidad de filas igual a cantidad de items y cantidad de columnas igual a cantidad de features.
- */
+
 double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_t cant_features){
     
     FILE *file = fopen(filename, "r");
-    //u_int64_t size_lines = CalcLines(f);
     rewind(file);
 
     //Definimos un arreglo de arreglos (cada item consta de 2 features)
@@ -314,8 +239,6 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
                 items[i][j] = feature; //Almacenamiento en item
                 j++;
                 token = strtok(NULL, ","); //busco el siguiente token
-              //  feature = strtod(token, &ptr); // 2do elemento
-              //  items[i][j] = feature;
             }
             i++;
         }
@@ -326,41 +249,13 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
     return items;
 }
 
-    /*
-    Ejemplo: range: 20
-             jump: 20 / 4 = 5
-             cantMeans -> PAR (4)
-                means[0] = 0 + 0.5 * 5 = 2.5
-                means[1] = 0 + 1.5 * 5 = 7.5
-                means[2] = 0 + 2.5 * 5 = 12.5
-                means[3] = 0 + 3.5 * 5 = 17.5
-             
-             range:20
-             jump: 20 / 3 = 6.67
-             cantMeans -> IMPAR(3)
-                means[0] = 0 + 0.5 * 6.67 = 3.34
-                means[1] = 0 + 1.5 * 6.67 = 10.01
-                means[2] = 0 + 2.5 * 6.67 = 16.67
 
-    */
-/**
- * @brief Inicializa el arreglo de medias en valores equiespaciados en el rango de datos.
- * @param cant_means cantidad de medias o clusters
- * @param cMin vector con los valores minimos de cada feature
- * @param cMax vector con los valores maximos de cada feature
- * @param cant_features cantidad de features (o columnas) de cada item
- * @return arreglo con las medias (1 por cada cluster).
- * 
- */
 double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int8_t cant_features){
     
     double **means = (double **) malloc(cant_means * sizeof(double*));
     for(u_int16_t n = 0; n < cant_means; n++){
         means[n] = (double *) malloc(cant_features * sizeof(double));
     }
-  //  double *range = (double *) malloc();
-    //double range = cMax - cMin;
-    //double jump = range / cant_means;
 
     //definimos el salto de un valor de media al siguiente
     double *jump = (double *) malloc(cant_features * sizeof(double));
@@ -381,11 +276,7 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
 }
 
 // PODRIAMOS HACER QUE CALCULE LA CANTIDAD DE FEATURES TAMBIEN
-/**
- * @brief Cuenta la cantidad de lineas del archivo (para definir el tamaño del arreglo items posteriormente)
- * @param filename nombre del archivo
- * @return cantidad de lineas (o items) del archivo
- */
+
 u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]) {
     FILE *f = fopen(filename, "r");
     u_int64_t cant_lines = 0; 
@@ -394,62 +285,19 @@ u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]) {
     while(fgets(cadena, TAM_LINEA, f)){
         valor = strstr(cadena, ",");
         valor++;
-        //printf("valor: %s\n",valor);
         if(valor != NULL && strcmp(valor,"values\n") && strcmp(valor,"\n")){
-            //printf("line:%s\n",cadena);
             cant_lines++;
         }
     }
     free (cadena);
     fclose(f);
     printf("Cantidad de items: %ld\n", cant_lines);
+
     return cant_lines;
 }
 
-/*Encontramos el item minimo del arreglo ITEMS
-double searchMin(const double * items, u_int64_t size_lines){
-    //Define el minimo como el maximo valor de tipo DOUBLE
-    double minimal = DBL_MAX;
 
-    for(u_int64_t i = 0; i < size_lines; i++){
-        if(items[i] < minimal){
-            minimal = items[i];
-        }
-    }
-    return minimal;
-}*/
-
-/*Encontramos el item maximo del arreglo ITEMS
-double searchMax(const double * items, u_int64_t size_lines){
-    //Define el maximo como el minimo valor de tipo LONG
-    double maximal = DBL_MIN;
-    for(u_int64_t i = 0; i < size_lines; i++){
-        if(items[i] > maximal){
-            maximal = items[i];
-        }
-    }
-    return maximal;
-}*/
-
-/**
- * @brief Encontramos minimo y maximo para cada feature del arreglo items.
- * @param items
- * @param size_lines
- * @param minimo
- * @param maximo
- * @param cant_features
- */
 void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* maximo, u_int8_t cant_features){
-
-
-    //Define el maximo como el minimo valor de tipo DOUBLE
-   // double maximo = DBL_MIN;
-    //Define el minimo como el maximo valor de tipo DOUBLE
-   // double minimo = DBL_MAX;
-
-   // double *maximo, *minimo;
-   // maximo = (double*) malloc(cant_features * sizeof(double));
-   // minimo = (double*) malloc(cant_features * sizeof(double));
 
     //Define el maximo como el minimo valor de tipo DOUBLE y el minimo como el maximo valor de tipo DOUBLE
     for(int n = 0; n < cant_features; n++){
@@ -467,6 +315,4 @@ void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* 
             }
         }
     }
-   // *cMin = minimo;
-   // *cMax = maximo;
 }
