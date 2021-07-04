@@ -16,8 +16,11 @@ int main(void) {
     start = omp_get_wtime(); 
     double ***clusters;
     u_int64_t *belongsTo;  //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
+    
+    start2 = omp_get_wtime(); 
     u_int64_t size_lines = CalcLines(PATH);
     double **items = ReadData(PATH, size_lines, CANT_FEATURES);
+    printf("Duración de CalcLines + ReadData: %f seg\n\n", omp_get_wtime() - start2);
 
     //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     belongsTo = calloc(size_lines, sizeof(u_int64_t));
@@ -29,7 +32,7 @@ int main(void) {
     
     printf("Valores de las medias finales:\n");
     for(int i = 0; i < CANT_MEANS; i++){
-        printf("Mean[%d] -> (%lf,%lf)\n", i, means[i][0], means[i][1]);
+        printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
     }
 
     //se libera la memoria del heap
@@ -152,7 +155,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         }*/
     }
 
-    printf(">>> Cantidad de items en cada cluster <<<\n");
+    printf("\n>>> Cantidad de items en cada cluster <<<\n");
     for (int m = 0; m < cant_means; m++) {
         printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
     }
@@ -263,12 +266,12 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
         jump[n] = (double) (cMax[n] - cMin[n]) / cant_means;
     }
 
-   printf("Valores de las medias iniciales:\n");
+   printf("\nValores de las medias iniciales:\n");
     for(u_int16_t i = 0; i < cant_means; i++){
         for(u_int8_t j = 0; j < cant_features; j++){
             means[i][j] = cMin[j] + (0.5 + i) * jump[j];
         }
-        printf("Mean[%d] -> (%lf,%lf)\n", i, means[i][0], means[i][1]);
+        printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1],  means[i][2]);
     }
 
     free(jump);
@@ -315,4 +318,7 @@ void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* 
             }
         }
     }
+
+    printf("maximos: %lf, %lf, %lf\n", maximo[0], maximo[1], maximo[2]);
+    printf("minimos: %lf, %lf, %lf\n", minimo[0], minimo[1], minimo[2]);
 }

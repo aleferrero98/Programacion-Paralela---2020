@@ -17,16 +17,17 @@
 #include <float.h>
 
 //#define PATH "./inputs/movisA.csv"
-//#define PATH "./inputs/randomData.csv"
+#define PATH "./inputs/randomData_3features.csv"
 //#define PATH "./inputs/movisB.csv"
-#define PATH "./inputs/movisA_2feature.csv"
+//#define PATH "./inputs/movisA_3feature.csv"
+
 #define TRUE 1
 #define FALSE 0
 #define CANT_MEANS 4
 #define CANT_ITERACIONES 100
 #define TAM_MAX_FILENAME 50     //tamaño max del nombre del archivo en caracteres
-#define TAM_LINEA 70
-#define CANT_FEATURES 2
+#define TAM_LINEA 100
+#define CANT_FEATURES 3
 
 /**
  * @brief Cuenta la cantidad de lineas del archivo (para definir el tamaño del arreglo items posteriormente)
