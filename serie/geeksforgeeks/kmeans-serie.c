@@ -27,13 +27,10 @@ int main(void) {
     
     start2 = omp_get_wtime(); 
     double **means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, size_lines, belongsTo, CANT_FEATURES);
-    printf("Duración de CalculateMeans: %f seg\n", omp_get_wtime() - start2);
-
-    start2 = omp_get_wtime();
     clusters = FindClusters(items, belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
-    printf("Duración de FindClusters: %f seg\n", omp_get_wtime() - start2);
+    printf("Duración de CalculateMeans + FindClusters: %f seg\n\n", omp_get_wtime() - start2);
     
-    printf("\nValores de las medias finales:\n");
+    printf("Valores de las medias finales:\n");
     for(int i = 0; i < CANT_MEANS; i++){
         printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
     }
@@ -103,16 +100,13 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 
     int noChange, j;
     double *item;
-    u_int64_t index;
+    u_int64_t cSize, index;
 
     //Inicializa las means (medias) con valores estimativos
     double** means = InitializeMeans(cant_means, cMin, cMax, cant_features);
 
     //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
     u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
-
-    //guarda las suma de los valores de los items de cada cluster para despues calcular el promedio
-    double sumas_items[cant_means][cant_features]; 
 
     //Calcula las medias
     for(j = 0; j < cant_iterations; j++) {
@@ -123,7 +117,6 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 
         //Resetea el clusterSizes a 0 para cada una de las medias
         memset(clusterSizes, 0, sizeof(u_int64_t)*cant_means);
-        memset(sumas_items, 0, sizeof(double)*cant_means*cant_features);
 
         for(u_int64_t k = 0; k < size_lines; k++) { //se recorren todos los items
             item = items[k];
@@ -132,13 +125,8 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
             index = Classify(means, item, cant_means, cant_features);
 
             clusterSizes[index] += 1;
-            //cSize = clusterSizes[index]; //cant de items del cluster
-            //updateMean(means[index], item, cSize, cant_features);
-
-            //agrego el valor del item a la suma acumulada del cluster seleccionado
-            for(int f = 0; f < cant_features; f++){
-                sumas_items[index][f] += item[f];
-            }
+            cSize = clusterSizes[index]; //cant de items del cluster
+            updateMean(means[index], item, cSize, cant_features);
 
             //si el Item cambio de cluster
             if(index != belongsTo[k]){
@@ -148,31 +136,23 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
             }
 
         }
-
-        //calcula las nuevas medias dividiendo las sumas acumuladas por la cantidad de cada cluster
-        for(int m = 0; m < cant_means; m++){
-            if(clusterSizes[m] == 0) continue; //para evitar divisiones por cero, la media queda en el valor anterior
-
-            for(int f = 0; f < cant_features; f++){
-                means[m][f] = sumas_items[m][f] / (double)clusterSizes[m];
-            }
+        //printf("Iteracion %d\n", j);
+        /*for (int n = 0; n < cantMeans; ++n) {
+            printf("Means[%d]: %f\n", n, means[n]);
         }
 
-        printf("Iteracion %d\n", j);
-        /*
-        for(int i = 0; i < cant_means; i++){
-            printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
-        }*/
-        /*
         for (int m = 0; m < cantMeans; ++m) {
             printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
         }*/
 
         //printf("countChangeItem: %lu - minPorcentaje: %lf\n",countChangeItem, minPorcentaje);
-        //if(noChange){ 
         if(noChange || (countChangeItem < minPorcentaje)){
             break;
         }
+        /*
+        if(noChange){
+            break;
+        }*/
     }
 
     printf("\n>>> Cantidad de items en cada cluster <<<\n");
