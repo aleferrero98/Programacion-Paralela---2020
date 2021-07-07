@@ -133,7 +133,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         #pragma omp parallel num_threads(NUM_THREADS) if(size_lines > CANT_MIN_ITEMS) firstprivate(cant_means, cant_features, size_lines) private(index, item, thread_id) shared(items, belongsTo, noChange, countChangeItem, clusterSizes, sumas_items, means) default(none)
         {       
             thread_id = omp_get_thread_num();
-            printf("Thread %d\n", thread_id); 
+            //printf("Thread %d\n", thread_id); 
             
             //guarda las suma de los valores de los items de cada cluster para despues calcular el promedio (cada thread tiene uno privado)
             double sumas_items_thread[cant_means][cant_features];
@@ -152,8 +152,6 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
                 index = Classify(means, item, cant_means, cant_features);
 
                 clusterSizes_thread[index] += 1;
-                // cSize = clusterSizes[index]; //cant de items del cluster
-                //updateMean(thread_means[index], item, cSize, cant_features);
                 
                 //agrego el valor del item a la suma acumulada del cluster seleccionado                   
                 for(int f = 0; f < cant_features; f++){
@@ -162,7 +160,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 
                 //si el Item cambio de cluster
                 if(index != belongsTo[k]){
-                   // #pragma omp critical
+                    #pragma omp atomic write
                         noChange = FALSE;
 
                     #pragma omp atomic
