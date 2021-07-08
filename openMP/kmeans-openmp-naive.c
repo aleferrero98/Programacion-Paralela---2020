@@ -38,14 +38,20 @@ int main(void) {
         printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
     }
 
+    start2 = omp_get_wtime();
     //se libera la memoria del heap
-    for(int n = 0; n < CANT_MEANS; n++){
-        for(u_int64_t m = 0; m < size_lines; m++){
-            free(clusters[n][m]);
-        } 
-        free(clusters[n]);
-    }
+    #pragma omp parallel num_threads(CANT_MEANS) if(FALSE) shared(size_lines, clusters) default(none)
+    {
+        #pragma omp for schedule(static) 
+        for(int n = 0; n < CANT_MEANS; n++){
+            for(u_int64_t m = 0; m < size_lines; m++){
+                free(clusters[n][m]);
+            } 
+            free(clusters[n]);
+        }
+    }//fin parallel
     free(clusters);
+    printf("Duración free(clusters): %f seg\n", omp_get_wtime() - start2);
 
     free(belongsTo);
     for(int n = 0; n < CANT_MEANS; n++){
@@ -76,16 +82,31 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     for(u_int8_t n = 0; n < cant_means; n++){
         clusters[n] = (double **) malloc(cant_items * sizeof(double*));
         indices[n] = 0;
-        for(u_int64_t m = 0; m < cant_items; m++){
-            clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+        #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_items, cant_features, clusters)
+        { 
+            #pragma omp for schedule(static)
+            for(u_int64_t m = 0; m < cant_items; m++){
+                clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+            }
         }
     }
 
-    for(u_int64_t i = 0; i < cant_items; i++){
-        for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
-            clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+    //NO CONVIENE PARALELIZAR ESTA PARTE (o ver si ordered conviene)
+    //con critical se obtienen peores resultados
+    #pragma omp parallel num_threads(NUM_THREADS) if(TRUE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
+    {
+        printf("%d\n", omp_get_thread_num());
+        #pragma omp for schedule(static) ordered
+        for(u_int64_t i = 0; i < cant_items; i++){
+            for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
+                //#pragma omp critical(escritura_cluster)
+                #pragma omp ordered
+                clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+            }
+            //#pragma omp critical(escritura_cluster)
+            #pragma omp ordered
+            indices[belongsTo[i]]++;
         }
-        indices[belongsTo[i]]++;
     }
 
     return clusters;

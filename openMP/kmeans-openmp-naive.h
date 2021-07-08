@@ -27,7 +27,7 @@
 #define CANT_ITERACIONES 100
 #define TAM_MAX_FILENAME 50     //tamaño max del nombre del archivo en caracteres
 #define TAM_LINEA 100
-#define CANT_MIN_ITEMS 1000  //cantidad minima de items para paralelizar
+#define CANT_MIN_ITEMS 10000  //cantidad minima de items para paralelizar
 #define CANT_FEATURES 3
 
 #define NUM_THREADS 4
