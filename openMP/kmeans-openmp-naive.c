@@ -71,6 +71,7 @@ int main(void) {
     return EXIT_SUCCESS;
 }
 
+
 double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
 
     // clusters es un array de 3 dimensiones, es un conjunto de clusters.
@@ -95,7 +96,7 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     //con critical se obtienen peores resultados
     #pragma omp parallel num_threads(NUM_THREADS) if(TRUE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
     {
-        printf("%d\n", omp_get_thread_num());
+        //printf("%d\n", omp_get_thread_num());
         #pragma omp for schedule(static) ordered
         for(u_int64_t i = 0; i < cant_items; i++){
             for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
@@ -111,6 +112,60 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 
     return clusters;
 }
+/*
+double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
+
+    // clusters es un array de 3 dimensiones, es un conjunto de clusters.
+    // cada cluster es un conjunto de items.
+    // cada item es un conjunto de features.
+    double ***clusters = (double ***) malloc(cant_means * sizeof(double**));
+
+    for(u_int8_t n = 0; n < cant_means; n++){
+        clusters[n] = (double **) malloc(cant_items * sizeof(double*));
+        #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_items, cant_features, clusters)
+        { 
+            #pragma omp for schedule(static)
+            for(u_int64_t m = 0; m < cant_items; m++){
+                clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+            }
+        }
+    }
+
+    int *pos = calloc(cant_means, sizeof(int));
+
+    #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_means, cant_items, cant_features, belongsTo, clusters, items, pos) default(none)
+    {
+        double ***clusters_thread = (double ***) malloc(cant_means * sizeof(double**));
+        int indices[cant_means]; //contiene la posicion en la que se debe agregar el proximo item al cluster
+        for(u_int8_t n = 0; n < cant_means; n++){
+            clusters_thread[n] = (double **) malloc(cant_items * sizeof(double*));
+            indices[n] = 0;
+        }
+
+        #pragma omp for schedule(static) 
+        for(u_int64_t i = 0; i < cant_items; i++){
+            //se asigna memoria para el item en el cluster que se va a agregar
+            clusters_thread[belongsTo[i]][indices[belongsTo[i]]] = (double *) malloc(cant_features * sizeof(double));
+
+            for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
+                clusters_thread[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+            }
+            indices[belongsTo[i]]++;
+        }
+
+        //cada hilo agrega los items que clasificó al final
+        #pragma omp critical
+        {
+            for(u_int8_t mm = 0; mm < cant_means; mm++){
+                clusters[mm][pos[mm]] = clusters_thread[mm][0];
+                pos[mm] = indices[mm];
+            }
+        }
+    }//fin parallel
+    free(pos);
+
+    return clusters;
+}*/
 
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t size_lines, u_int64_t* belongsTo, u_int8_t cant_features){
     //Encuentra el minimo y maximo de cada columna (o feature)
