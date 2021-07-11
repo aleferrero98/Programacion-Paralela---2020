@@ -22,6 +22,7 @@ IMPLEMENTACION=naive
 
 # Opt de compilacion 
 CC=gcc
+MPICC=mpicc
 PROFILER= scorep --openmp #--verbose
 CFLAGS= -g -Wall -pedantic -Wextra -Wconversion -march=native -O0 #-Werror
 
@@ -36,7 +37,10 @@ openmp_kmeans: $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(OPENMP_DIR)
 	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 # $(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 
-#mpi_kmeans:
+mpi_kmeans: $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).h
+	mkdir -p $(BINARY_DIR)/$(MPI_DIR)
+	$(MPICC) $(CFLAGS) -o $(BINARY_DIR)/$(MPI_DIR)/$(BIN_MPI)_$(IMPLEMENTACION)  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c -lm 
+
 
 #cuda_kmeans:
 
