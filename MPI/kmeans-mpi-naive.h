@@ -142,6 +142,6 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 double round(double var);
 
 
-double **alloc_2d_double(int rows, int cols);
+double **alloc_2d_double(u_int64_t rows, u_int64_t cols);
 
 #endif //_KMEANS_MPI_H_

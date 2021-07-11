@@ -20,8 +20,9 @@ int main(int argc, char* argv[]) {
     u_int64_t size_lines = 0;
     //double  **items;
     double **all_items;
-    int cant_items_proc; //cantidad de items por proceso
+    u_int64_t cant_items_proc; //cantidad de items por proceso
     double **means;
+    u_int64_t resto = 0;
 
     MPI_Init(&argc, &argv);
     
@@ -44,13 +45,21 @@ int main(int argc, char* argv[]) {
     printf("proc %d, size_lines: %lu\n", rank, size_lines);
 
 //HACER PARA EL CASO QUE LA DIVISION NO SEA ENTERA(EL RESTO SE LO QUEDA EL PROC 0)
-    cant_items_proc = size_lines/num_tasks;
-    printf("cant items proc: %d\n", cant_items_proc);
+    cant_items_proc = size_lines/(unsigned)num_tasks;
+    if(rank == 0){ //si la division no es entera y sobran items, los clasifica el proceso 0
+        resto = size_lines % (unsigned)num_tasks;
+    }
+    printf("cant items proc: %ld\n", cant_items_proc);
 
-    double **items = alloc_2d_double(cant_items_proc, CANT_FEATURES);
+    double **items = alloc_2d_double(cant_items_proc + resto, CANT_FEATURES); //resto puede ser distinto de cero para el proc 0.
 
-    //se envia una cierta cantidad de items a cada proceso
-    MPI_Scatter(&(all_items[0][0]), cant_items_proc, MPI_DOUBLE, &(items[0][0]), cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //se envia una cierta cantidad de items a cada proceso (se toman como resto los primeros items, van a parar al proceso 0)
+    MPI_Scatter(&(all_items[0][0]) + resto*sizeof(double), (int)cant_items_proc, MPI_DOUBLE, &(items[0][0]) + resto*sizeof(double), (int)cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if(rank == 0){ //copio los items restantes al proc 0
+        memcpy(&(items[0][0]), &(all_items[0][0]), resto*sizeof(double));
+        cant_items_proc += resto; //se le agrega el resto al proceso 0
+    }
+  //  MPI_Scatter(&(all_items[0][0]), cant_items_proc, MPI_DOUBLE, &(items[0][0]), cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     printf("proc %d, items[0][0]: %lf\n", rank, items[0][0]);
 
     //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
@@ -64,6 +73,7 @@ int main(int argc, char* argv[]) {
     if(rank == 0){
         cMin = (double*) malloc(CANT_FEATURES * sizeof(double));
         cMax = (double*) malloc(CANT_FEATURES * sizeof(double));
+        //Encuentra el minimo y maximo de cada columna (o feature)
         searchMinMax(all_items, size_lines, cMin, cMax, CANT_FEATURES);
 
         printf("MIN: %lf, MAX: %lf\n", cMin[0], cMax[0]);
@@ -102,12 +112,13 @@ int main(int argc, char* argv[]) {
     }
     free(clusters);
 
-    free(belongsTo);
     for(int n = 0; n < CANT_MEANS; n++){
         free(means[n]);
     }
     free(means);  
 */
+
+    free(belongsTo);
 
     free(items[0]);
     free(items);
@@ -131,10 +142,10 @@ int main(int argc, char* argv[]) {
     return EXIT_SUCCESS;
 }
 
-double **alloc_2d_double(int rows, int cols) {
+double **alloc_2d_double(u_int64_t rows, u_int64_t cols) {
     double *data = (double *)malloc(rows * cols * sizeof(double));
     double **array= (double **)malloc(rows * sizeof(double*));
-    for (int i = 0; i < rows; i++)
+    for (u_int64_t i = 0; i < rows; i++)
         array[i] = &(data[cols*i]);
 
     return array;
@@ -168,7 +179,6 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 }
 
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double** means){
-    //Encuentra el minimo y maximo de cada columna (o feature)
    // double *cMin, *cMax;
     int rank, num_tasks;
    // double **means;
@@ -236,12 +246,14 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         MPI_Reduce(sumas_items, all_sumas_items, cant_means*cant_features, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         MPI_Reduce(clusterSizes, all_clusterSizes, cant_means, MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
 
-        //calcula las nuevas medias dividiendo las sumas acumuladas por la cantidad de cada cluster
-        for(int m = 0; m < cant_means; m++){
-            if(all_clusterSizes[m] == 0) continue; //para evitar divisiones por cero, la media queda en el valor anterior
+        if(rank == 0){
+            //calcula las nuevas medias dividiendo las sumas acumuladas por la cantidad de cada cluster
+            for(int m = 0; m < cant_means; m++){
+                if(all_clusterSizes[m] == 0) continue; //para evitar divisiones por cero, la media queda en el valor anterior
 
-            for(int f = 0; f < cant_features; f++){
-                means[m][f] = all_sumas_items[m][f] / (double)all_clusterSizes[m];
+                for(int f = 0; f < cant_features; f++){
+                    means[m][f] = all_sumas_items[m][f] / (double)all_clusterSizes[m];
+                }
             }
         }
 
@@ -266,11 +278,16 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         }
     }
 
-    printf("\n>>> Cantidad de items en cada cluster <<<\n");
-    for (int m = 0; m < cant_means; m++) {
-        printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
+    //envia las medias a los otros procesos
+    MPI_Bcast(&(means[0][0]), cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if(rank == 0){
+        printf("\n>>> Cantidad de items en cada cluster <<<\n");
+        for (int m = 0; m < cant_means; m++) {
+            printf("Cluster[%d]: %lu\n", m, all_clusterSizes[m]);
+        }
+        printf("Cantidad de iteraciones: %d\n", j);
     }
-    printf("Cantidad de iteraciones: %d\n", j);
 
     free(clusterSizes);
     free(all_clusterSizes);
