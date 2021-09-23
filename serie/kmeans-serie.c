@@ -38,6 +38,12 @@ int main(void) {
         printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
     }
 
+    /*printf("clusters: (%lf,%lf,%lf) - (%lf,%lf,%lf) - (%lf,%lf,%lf) - (%lf,%lf,%lf)\n", 
+                            clusters[0][0][0], clusters[0][0][1], clusters[0][0][2],
+                                clusters[1][0][0], clusters[1][0][1], clusters[1][0][2],
+                                 clusters[2][0][0],  clusters[2][0][1],  clusters[2][0][2],
+                                  clusters[3][0][0],  clusters[3][0][1],  clusters[3][0][2]);*/
+
     //se libera la memoria del heap
     for(int n = 0; n < CANT_MEANS; n++){
         for(u_int64_t m = 0; m < size_lines; m++){
@@ -93,9 +99,13 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t size_lines, u_int64_t* belongsTo, u_int8_t cant_features){
     //Encuentra el minimo y maximo de cada columna (o feature)
     double *cMin, *cMax;
+    double start;
+
     cMin = (double*) malloc(cant_features * sizeof(double));
     cMax = (double*) malloc(cant_features * sizeof(double));
+    start = omp_get_wtime();
     searchMinMax(items, size_lines, cMin, cMax, cant_features);
+    printf("Duración de searchMinMax: %f seg\n", omp_get_wtime() - start);
 
     //define el porcentaje minimo de cambio de items entre clusters para que continue la ejecucion del algoritmo
     double minPorcentaje = 0.001 * (double) size_lines;
@@ -105,8 +115,10 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
     double *item;
     u_int64_t index;
 
+    start = omp_get_wtime();
     //Inicializa las means (medias) con valores estimativos
     double** means = InitializeMeans(cant_means, cMin, cMax, cant_features);
+    printf("Duración de InitializeMeans: %f seg\n\n", omp_get_wtime() - start);
 
     //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
     u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
