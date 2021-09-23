@@ -34,10 +34,14 @@ serie_kmeans: $(SERIE_DIR)/$(KMEANS_SERIE).c  $(SERIE_DIR)/$(KMEANS_SERIE).h
 	mkdir -p $(BINARY_DIR)/$(SERIE_DIR)
 	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(SERIE_DIR)/$(BIN_SERIE) $(SERIE_DIR)/$(KMEANS_SERIE).c -lm -fopenmp
 
-openmp_kmeans: $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).h
+openmp_kmeans_naive: $(OPENMP_DIR)/$(KMEANS_OPENMP)-naive.c  $(OPENMP_DIR)/$(KMEANS_OPENMP)-naive.h
 	mkdir -p $(BINARY_DIR)/$(OPENMP_DIR)
-	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
+	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_naive  $(OPENMP_DIR)/$(KMEANS_OPENMP)-naive.c -lm -fopenmp
 # $(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
+
+openmp_kmeans_efficient: $(OPENMP_DIR)/$(KMEANS_OPENMP)-efficient.c  $(OPENMP_DIR)/$(KMEANS_OPENMP)-efficient.h
+	mkdir -p $(BINARY_DIR)/$(OPENMP_DIR)
+	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_efficient  $(OPENMP_DIR)/$(KMEANS_OPENMP)-efficient.c -lm -fopenmp
 
 mpi_kmeans2: $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).h
 	mkdir -p $(BINARY_DIR)/$(MPI_DIR)

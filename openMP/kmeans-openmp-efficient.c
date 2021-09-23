@@ -6,7 +6,7 @@
  * @date 26/05/2021
  */
 
-#include "kmeans-openmp-naive.h"
+#include "kmeans-openmp-efficient.h"
 #include <omp.h>
 
 
@@ -40,16 +40,12 @@ int main(void) {
 
     start2 = omp_get_wtime();
     //se libera la memoria del heap
-    #pragma omp parallel num_threads(CANT_MEANS) if(TRUE) shared(size_lines, clusters) default(none)
-    {
-        #pragma omp for schedule(static) 
-        for(int n = 0; n < CANT_MEANS; n++){
-            for(u_int64_t m = 0; m < size_lines; m++){
-                free(clusters[n][m]);
-            } 
-            free(clusters[n]);
-        }
-    }//fin parallel
+    for(int n = 0; n < CANT_MEANS; n++){
+    	for(u_int64_t m = 0; m < size_lines; m++){
+	    free(clusters[n][m]);
+        } 
+        free(clusters[n]);
+    }
     free(clusters);
     printf("Duración free(clusters): %f seg\n", omp_get_wtime() - start2);
 
@@ -86,9 +82,12 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     for(u_int8_t n = 0; n < cant_means; n++){
         clusters[n] = (double **) malloc(cant_items * sizeof(double*));
         indices[n] = 0;
-           
-        for(u_int64_t m = 0; m < cant_items; m++){
-            clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+        #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_items, cant_features, clusters)
+        { 
+            #pragma omp for schedule(static)
+            for(u_int64_t m = 0; m < cant_items; m++){
+                clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+            }
         }
     }
 
@@ -97,7 +96,7 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     start = omp_get_wtime();
 
     //con critical se obtienen peores resultados
-    #pragma omp parallel num_threads(NUM_THREADS) if(TRUE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
+    #pragma omp parallel num_threads(NUM_THREADS) if(FALSE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
     {
         //printf("%d\n", omp_get_thread_num());
         #pragma omp for schedule(static) ordered
@@ -115,9 +114,9 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 
     printf("Duración insert clusters: %f seg\n", omp_get_wtime() - start);
 
-
     return clusters;
 }
+
 /*
 double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
 
@@ -125,6 +124,9 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     // cada cluster es un conjunto de items.
     // cada item es un conjunto de features.
     double ***clusters = (double ***) malloc(cant_means * sizeof(double**));
+
+    double start;
+    start = omp_get_wtime();
 
     for(u_int8_t n = 0; n < cant_means; n++){
         clusters[n] = (double **) malloc(cant_items * sizeof(double*));
@@ -138,6 +140,9 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     }
 
     int *pos = calloc(cant_means, sizeof(int));
+
+    printf("Duración alloc: %f seg\n", omp_get_wtime() - start);
+    start = omp_get_wtime();
 
     #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_means, cant_items, cant_features, belongsTo, clusters, items, pos) default(none)
     {
@@ -170,8 +175,11 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     }//fin parallel
     free(pos);
 
+    printf("Duración insert clusters: %f seg\n", omp_get_wtime() - start);
+
     return clusters;
-}*/
+}
+*/
 
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t size_lines, u_int64_t* belongsTo, u_int8_t cant_features){
     //Encuentra el minimo y maximo de cada columna (o feature)
@@ -212,7 +220,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         int thread_id = 0;
 
         //se paraleliza solo si la cantidad de items es lo suficientemente grande como para hacerlo
-        #pragma omp parallel num_threads(NUM_THREADS)  firstprivate(cant_means, cant_features, size_lines) private(index, item, thread_id) shared(items, belongsTo, noChange, countChangeItem, clusterSizes, sumas_items, means) default(none)
+        #pragma omp parallel num_threads(NUM_THREADS) if(size_lines > CANT_MIN_ITEMS) firstprivate(cant_means, cant_features, size_lines) private(index, item, thread_id) shared(items, belongsTo, noChange, countChangeItem, clusterSizes, sumas_items, means) default(none)
         {       
             thread_id = omp_get_thread_num();
             //printf("Thread %d\n", thread_id); 
