@@ -1,5 +1,5 @@
 /**
- * @file 
+ * @file kmeans-mpi-naive.h
  * @brief 
  * @author Jeremias Agustinoy y Alejandro Ferrero
  * @version 1.0
@@ -17,10 +17,10 @@
 #include <float.h>
 
 //#define PATH "./inputs/movisA.csv"
-//#define PATH "./inputs/randomData_3features.csv"
 //#define PATH "./inputs/movisB.csv"
-//#define PATH "./inputs/randomData_5M_3features.csv"
-#define PATH "./inputs/randomData_1M_3feature.csv"
+//#define PATH "./inputs/randomData_5M_3feature.csv"
+//#define PATH "./inputs/randomData_1M_3feature.csv"
+#define PATH "./inputs/randomData_2M_3feature.csv"
 
 #define TRUE 1
 #define FALSE 0
