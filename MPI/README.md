@@ -14,4 +14,7 @@ La idea es la siguiente:
 - p0 calcula las nuevas medias con los valores de la reduccion.
 - se hace una reduccion(AND) para los flag noChange y una reduccion(suma) de countChangeItem para determinar si hay que hacer una iteracion mas o no. Ademas de la reduccion se hace un broadcast para que todos los procesos tengan el dato.
 - se envian (BROADCAST) los valores de las medias globales actualizados desde p0 a los otros procesos.
- 
+
+COMANDOS
+ - compilar: mpicc kmeans-mpi.c -lm
+ - ejecutar:  mpirun -np <NRO_PROCESOS> ejecutable  (mpirun -np 2 ./a.out)  

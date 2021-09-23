@@ -6,7 +6,7 @@
  * @date 26/05/2021
  */
 
-#include "kmeans-mpi-naive.h"
+#include "kmeans-mpi.h"
 #include "mpi.h"
 
 //#define NUM_PROCS 4  //numero de procesasdores
@@ -19,10 +19,12 @@ int main(int argc, char* argv[]) {
     u_int64_t *belongsTo;  //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     u_int64_t size_lines = 0;
     //double  **items;
-    double **all_items;
+    double *all_items;
     u_int64_t cant_items_proc; //cantidad de items por proceso
-    double **means;
+    double *means;
     u_int64_t resto = 0;
+
+   // double **test;
 
     MPI_Init(&argc, &argv);
     
@@ -31,6 +33,8 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
     printf("num tasks: %d\n", num_tasks);
+
+    //test = alloc_2d_double(1000000, 3);
 
     //el proceso con rango 0 es el que lee y distribuye los datos    
     if(rank == 0){ 
@@ -48,23 +52,27 @@ int main(int argc, char* argv[]) {
     cant_items_proc = size_lines/(unsigned)num_tasks;
     if(rank == 0){ //si la division no es entera y sobran items, los clasifica el proceso 0
         resto = size_lines % (unsigned)num_tasks;
+
     }
+    printf("resto: %ld\n", resto);
     printf("cant items proc: %ld\n", cant_items_proc);
 
-    double **items = alloc_2d_double(cant_items_proc + resto, CANT_FEATURES); //resto puede ser distinto de cero para el proc 0.
+    //double **items = alloc_2d_double(cant_items_proc + resto, CANT_FEATURES); //resto puede ser distinto de cero para el proc 0.
+    double *items = (double *) malloc((cant_items_proc + resto) * CANT_FEATURES * sizeof(double));
 
     //se envia una cierta cantidad de items a cada proceso (se toman como resto los primeros items, van a parar al proceso 0)
-    MPI_Scatter(&(all_items[0][0]) + resto*sizeof(double), (int)cant_items_proc, MPI_DOUBLE, &(items[0][0]) + resto*sizeof(double), (int)cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Scatter(all_items + resto*sizeof(double), (int)cant_items_proc*CANT_FEATURES, MPI_DOUBLE, items + resto*sizeof(double), (int)cant_items_proc*CANT_FEATURES, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //MPI_Scatter(&(all_items[0][0]), (int)cant_items_proc, MPI_DOUBLE, &(items[0]), (int)cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if(rank == 0){ //copio los items restantes al proc 0
-        memcpy(&(items[0][0]), &(all_items[0][0]), resto*sizeof(double));
+        memcpy(items, all_items, resto*sizeof(double));
         cant_items_proc += resto; //se le agrega el resto al proceso 0
     }
   //  MPI_Scatter(&(all_items[0][0]), cant_items_proc, MPI_DOUBLE, &(items[0][0]), cant_items_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    printf("proc %d, items[0][0]: %lf\n", rank, items[0][0]);
+    printf("proc %d, items[0][0]: %lf, %lf, %lf\n", rank, items[0], items[1], items[2]);
 
     //Define un arreglo para almacenar el indice del cluster al que pertenece cada item
     belongsTo = calloc(cant_items_proc, sizeof(u_int64_t));
-    printf("SE ENVIARON LOS ITEMS\n");
+ //   printf("SE ENVIARON LOS ITEMS\n");
 
     //-----------------------------------
     double *cMin, *cMax;
@@ -76,68 +84,82 @@ int main(int argc, char* argv[]) {
         //Encuentra el minimo y maximo de cada columna (o feature)
         searchMinMax(all_items, size_lines, cMin, cMax, CANT_FEATURES);
 
-        printf("MIN: %lf, MAX: %lf\n", cMin[0], cMax[0]);
+       // printf("MIN: %lf, MAX: %lf\n", cMin[0], cMax[0]);
 
         //Inicializa las means (medias) con valores estimativos
-        means = (double **) InitializeMeans(CANT_MEANS, cMin, cMax, CANT_FEATURES);
-        printf("MEAN: %lf, %lf\n", means[0][0], means[2][0]);
+        means = (double *) InitializeMeans(CANT_MEANS, cMin, cMax, CANT_FEATURES);
+       // printf("MEAN: %lf, %lf\n", means[0*CANT_FEATURES + 0], means[2*CANT_FEATURES + 0]);
 
     }else{ //para el resto de procesos se asigna espacio para las medias
-        means = (double **) alloc_2d_double(CANT_MEANS, CANT_FEATURES);
+        means = (double *) malloc(CANT_MEANS * CANT_FEATURES * sizeof(double));
     }
 
     //-----------------------------------
     
     start2 = MPI_Wtime(); 
     means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, cant_items_proc, belongsTo, CANT_FEATURES, means);
-    printf("Duración de CalculateMeans: %f seg\n", MPI_Wtime() - start2);
-
-    /*if(rank == 0){
+    printf("\nDuración de CalculateMeans: %f seg\n", MPI_Wtime() - start2);
+    
+    //se crea vector all_belongsTo que contiene los belongTo de todos los procesos
+    u_int64_t *all_belongsTo;
+    if(rank == 0){
+        all_belongsTo = calloc(size_lines, sizeof(u_int64_t));
+    }
+    //se envia al proceso 0 todos los arrays belongsTo
+    MPI_Gather(belongsTo, cant_items_proc, MPI_UINT64_T, all_belongsTo, cant_items_proc, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+//printf("\nDESPUES DE GATHER\n");
+    if(rank == 0){
         start2 = MPI_Wtime();
-        clusters = FindClusters(items, belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
+
+       // printf("all_belongsTo: %lu, %lu\n", all_belongsTo[0], all_belongsTo[999999]);
+        clusters = FindClusters(all_items, all_belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
         printf("Duración de FindClusters: %f seg\n", MPI_Wtime() - start2);
         
         printf("\nValores de las medias finales:\n");
         for(int i = 0; i < CANT_MEANS; i++){
-            printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
+            printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i*CANT_FEATURES + 0], means[i*CANT_FEATURES + 1], means[i*CANT_FEATURES + 2]);
         }
     }
 
     //se libera la memoria del heap
-    for(int n = 0; n < CANT_MEANS; n++){
-        for(u_int64_t m = 0; m < size_lines; m++){
-            free(clusters[n][m]);
-        } 
-        free(clusters[n]);
-    }
-    free(clusters);
 
+
+/*
     for(int n = 0; n < CANT_MEANS; n++){
         free(means[n]);
     }
-    free(means);  
-*/
+    free(means);  */
+
 
     free(belongsTo);
 
-    free(items[0]);
+    //free(items[0]);
     free(items);
 
-    free(means[0]);
+    //free(means[0]);
     free(means);
 
+    end = MPI_Wtime(); 
+    
     if(rank == 0){
+        printf("\033[1;33m >>> Ejecución algoritmo K-means MPI <<<\033[0;37m \n");
+        printf("Duración total del programa: %f seg\n", end - start);
         free(cMin);
         free(cMax);
-        free(all_items[0]);
+       // free(all_items[0]);
         free(all_items);
+        free(all_belongsTo);
+        for(int n = 0; n < CANT_MEANS; n++){
+            for(u_int64_t m = 0; m < size_lines; m++){
+                free(clusters[n][m]);
+            } 
+            free(clusters[n]);
+        }
+        free(clusters);
     }
 
     MPI_Finalize();
 
-    end = MPI_Wtime(); 
-    printf("\033[1;33m >>> Ejecución algoritmo K-means MPI <<<\033[0;37m \n");
-    printf("Duración total del programa: %f seg\n", end - start);
     
     return EXIT_SUCCESS;
 }
@@ -152,7 +174,7 @@ double **alloc_2d_double(u_int64_t rows, u_int64_t cols) {
 }
 
 
-double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
+double*** FindClusters(double* items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
 
     // clusters es un array de 3 dimensiones, es un conjunto de clusters.
     // cada cluster es un conjunto de items.
@@ -167,10 +189,11 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
             clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
         }
     }
+   // printf("BIEN\n");
 
     for(u_int64_t i = 0; i < cant_items; i++){
         for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
-            clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+            clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i*cant_features + j];
         }
         indices[belongsTo[i]]++;
     }
@@ -178,7 +201,7 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     return clusters;
 }
 
-double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double** means){
+double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means){
    // double *cMin, *cMax;
     int rank, num_tasks;
    // double **means;
@@ -193,6 +216,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 
     //define el porcentaje minimo de cambio de items entre clusters para que continue la ejecucion del algoritmo
     minPorcentaje = 0.001 * (double) cant_items_proc*num_tasks;
+    //printf("min porcentaje: %lf", minPorcentaje);
     
     //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
     u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
@@ -216,10 +240,10 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         printf("ANTES ENVIO MEANS\n");
         
         //envia las medias a los otros procesos
-        MPI_Bcast(&(means[0][0]), cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         for(u_int64_t k = 0; k < cant_items_proc; k++) { //cada proceso recorre sus items
-            item = items[k];
+            item = &(items[k*cant_features]);
 
             //Clasifica item dentro de un cluster y actualiza las medias correspondientes
             index = Classify(means, item, cant_means, cant_features);
@@ -252,16 +276,17 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
                 if(all_clusterSizes[m] == 0) continue; //para evitar divisiones por cero, la media queda en el valor anterior
 
                 for(int f = 0; f < cant_features; f++){
-                    means[m][f] = all_sumas_items[m][f] / (double)all_clusterSizes[m];
+                    means[m*cant_features + f] = all_sumas_items[m][f] / (double)all_clusterSizes[m];
                 }
             }
         }
 
         printf("Iteracion %d\n", j);
-        /*
-        for(int i = 0; i < cant_means; i++){
-            printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
-        }*/
+        if(rank == 0){
+            for(int i = 0; i < cant_means; i++){
+                printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i*cant_features+0], means[i*cant_features+1], means[i*cant_features+2]);
+            }
+        }
         /*
         for (int m = 0; m < cantMeans; ++m) {
             printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
@@ -279,7 +304,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
     }
 
     //envia las medias a los otros procesos
-    MPI_Bcast(&(means[0][0]), cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     if(rank == 0){
         printf("\n>>> Cantidad de items en cada cluster <<<\n");
@@ -296,14 +321,14 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
 }
 
 
-u_int64_t Classify(double** means, double* item, int cant_means, int cant_features){
+u_int64_t Classify(double* means, double* item, int cant_means, int cant_features){
     double minimun = DBL_MAX;
     int index = -1;
     double distance;
 
     for(int i = 0; i < cant_means; i++){
         //calcula la distancia de un item a la media
-        distance = distanciaEuclidiana(item, means[i], cant_features);
+        distance = distanciaEuclidiana(item, &(means[i*cant_features]), cant_features);
         if(distance < minimun){
             minimun = distance;
             index = i;
@@ -340,7 +365,7 @@ double round(double var){
 }
 
 
-double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_t cant_features){
+double* ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_t cant_features){
     
     FILE *file = fopen(filename, "r");
     rewind(file);
@@ -352,7 +377,8 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
     }*/
 
     //Definimos un arreglo de arreglos (cada item consta de 2 o mas features)
-    double** items = (double **) alloc_2d_double(size_lines, cant_features);
+    //double** items = (double **) alloc_2d_double(size_lines, cant_features);
+    double* items = (double *) malloc(size_lines * cant_features * sizeof(double));
 
     char* line = calloc(TAM_LINEA, sizeof(char));
     double feature;
@@ -368,7 +394,7 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
             char *token = strtok(item, ","); //separa los elementos de la linea por comas
             while(token != NULL){
                 feature = strtod(token, &ptr); //Pasaje a double
-                items[i][j] = feature; //Almacenamiento en item
+                items[i*cant_features + j] = feature; //Almacenamiento en item
                 j++;
                 token = strtok(NULL, ","); //busco el siguiente token
             }
@@ -382,13 +408,14 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
 }
 
 
-double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int8_t cant_features){
+double* InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int8_t cant_features){
     
     /*double **means = (double **) malloc(cant_means * sizeof(double*));
     for(u_int16_t n = 0; n < cant_means; n++){
         means[n] = (double *) malloc(cant_features * sizeof(double));
     }*/
-    double **means = (double **) alloc_2d_double(cant_means, cant_features);
+    //double **means = (double **) alloc_2d_double(cant_means, cant_features);
+    double *means = (double *) malloc(cant_means * cant_features * sizeof(double));
 
     //definimos el salto de un valor de media al siguiente
     double *jump = (double *) malloc(cant_features * sizeof(double));
@@ -399,9 +426,9 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
    printf("\nValores de las medias iniciales:\n");
     for(u_int16_t i = 0; i < cant_means; i++){
         for(u_int8_t j = 0; j < cant_features; j++){
-            means[i][j] = cMin[j] + (0.5 + i) * jump[j];
+            means[i*cant_features + j] = cMin[j] + (0.5 + i) * jump[j];
         }
-        printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1],  means[i][2]);
+        printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i*cant_features + 0], means[i*cant_features + 1],  means[i*cant_features + 2]);
     }
 
     free(jump);
@@ -430,7 +457,7 @@ u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]) {
 }
 
 
-void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* maximo, u_int8_t cant_features){
+void searchMinMax(double* items, u_int64_t size_lines, double* minimo, double* maximo, u_int8_t cant_features){
 
     //Define el maximo como el minimo valor de tipo DOUBLE y el minimo como el maximo valor de tipo DOUBLE
     for(int n = 0; n < cant_features; n++){
@@ -440,11 +467,11 @@ void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* 
     
     for(u_int64_t i = 0; i < size_lines; i++){  //recorremos cada item
         for(u_int8_t j = 0; j < cant_features; j++){  //recorremos cada feature
-            if(items[i][j] < minimo[j]){
-                minimo[j] = items[i][j];
+            if(items[i*cant_features + j] < minimo[j]){
+                minimo[j] = items[i*cant_features + j];
             }
-            if(items[i][j] > maximo[j]){
-                maximo[j] = items[i][j];
+            if(items[i*cant_features + j] > maximo[j]){
+                maximo[j] = items[i*cant_features + j];
             }
         }
     }

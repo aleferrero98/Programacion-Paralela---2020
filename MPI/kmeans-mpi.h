@@ -16,10 +16,11 @@
 #include <math.h>
 #include <float.h>
 
-#define PATH "./inputs/movisA.csv"
+//#define PATH "./inputs/movisA.csv"
 //#define PATH "./inputs/randomData_3features.csv"
 //#define PATH "./inputs/movisB.csv"
 //#define PATH "./inputs/randomData_5M_3features.csv"
+#define PATH "./inputs/randomData_1M_3feature.csv"
 
 #define TRUE 1
 #define FALSE 0
@@ -27,7 +28,7 @@
 #define CANT_ITERACIONES 100
 #define TAM_MAX_FILENAME 50     //tamaño max del nombre del archivo en caracteres
 #define TAM_LINEA 100
-#define CANT_FEATURES 1
+#define CANT_FEATURES 3
 
 /**
  * @brief Cuenta la cantidad de lineas del archivo (para definir el tamaño del arreglo items posteriormente)
@@ -43,7 +44,7 @@ u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]);
  * @param cant_features cantidad de features de cada item (cantidad de columnas del archivo separadas por comas) 
  * @return arreglo doble con cantidad de filas igual a cantidad de items y cantidad de columnas igual a cantidad de features.
  */
-double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_t cant_features);
+double* ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_t cant_features);
 
 /**
  * @brief Inicializa el arreglo de medias en valores equiespaciados en el rango de datos.
@@ -60,7 +61,7 @@ double** ReadData(char filename[TAM_MAX_FILENAME], u_int64_t size_lines, u_int8_
  *          means[2] = 0 + 2.5 * 5 = 12.5
  *          means[3] = 0 + 3.5 * 5 = 17.5
  */
-double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int8_t cant_features);
+double* InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int8_t cant_features);
 
 /**
  * @brief Busca el minimo y maximo valor para cada feature del arreglo items.
@@ -70,7 +71,7 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
  * @param maximo arreglo de los valores maximos de cada feature
  * @param cant_features cantidad de caracteristicas que tiene cada item
  */
-void searchMinMax(double** items, u_int64_t size_lines, double* minimo, double* maximo, u_int8_t cant_features);
+void searchMinMax(double* items, u_int64_t size_lines, double* minimo, double* maximo, u_int8_t cant_features);
 
 /**
  * @brief Calcula distancia euclidiana entre dos vectores.
@@ -99,7 +100,7 @@ void updateMean(double* mean, double* item, u_int64_t cant_items, u_int8_t cant_
  * @param cant_features cantidad de caracteristicas de cada item
  * @return el indice de la media a la que se asocio el item.
  */
-u_int64_t Classify(double** means, double* item, int cant_means, int cant_features);
+u_int64_t Classify(double* means, double* item, int cant_means, int cant_features);
 
 /**
  * @brief Calcula los valores de la media de cada cluster. Itera por todos los items,
@@ -116,7 +117,7 @@ u_int64_t Classify(double** means, double* item, int cant_means, int cant_featur
  * @param cant_features cantidad de caracteristicas de los items.
  * @return arreglo de medias de todos los clusters.
  */
-double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double** means);
+double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means);
 
 /**
  * @brief Crea una lista de clusters, donde cada cluster es a su vez un arreglo que contiene 
@@ -128,7 +129,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
  * @param cant_features cantidad de caracteristicas de cada item.
  * @return arreglo de clusters, c/u con sus items
  */
-double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features);
+double*** FindClusters(double* items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features);
 
 /**
  * @brief redondea un numero de punto flotante a 3 cifras despues de la coma.
