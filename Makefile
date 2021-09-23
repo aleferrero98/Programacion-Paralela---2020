@@ -13,7 +13,7 @@ KMEANS_OPENMP=kmeans-openmp
 BIN_OPENMP=kmeans_openmp
 KMEANS_MPI=kmeans-mpi
 BIN_MPI=kmeans_mpi
-KMEANS_CUDA=kmeans-cuda
+KMEANS_CUDA=cukmeans
 BIN_CUDA=kmeans_cuda
 
 #Implementaciones
@@ -23,6 +23,8 @@ IMPLEMENTACION=naive
 # Opt de compilacion 
 CC=gcc
 MPICC=mpicc
+NUM_PROCS=4
+NVCC=nvcc
 PROFILER= scorep --openmp #--verbose
 CFLAGS= -g -Wall -pedantic -Wextra -Wconversion -march=native -O0 #-Werror
 
@@ -37,12 +39,20 @@ openmp_kmeans: $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c  $(OPENMP_DIR)
 	$(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 # $(PROFILER) $(CC) $(CFLAGS) -o $(BINARY_DIR)/$(OPENMP_DIR)/$(BIN_OPENMP)_$(IMPLEMENTACION)  $(OPENMP_DIR)/$(KMEANS_OPENMP)-$(IMPLEMENTACION).c -lm -fopenmp
 
-mpi_kmeans: $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).h
+mpi_kmeans2: $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).h
 	mkdir -p $(BINARY_DIR)/$(MPI_DIR)
 	$(MPICC) $(CFLAGS) -o $(BINARY_DIR)/$(MPI_DIR)/$(BIN_MPI)_$(IMPLEMENTACION)  $(MPI_DIR)/$(KMEANS_MPI)-$(IMPLEMENTACION).c -lm 
 
+mpi_kmeans: $(MPI_DIR)/$(KMEANS_MPI).c  $(MPI_DIR)/$(KMEANS_MPI).h
+	mkdir -p $(BINARY_DIR)/$(MPI_DIR)
+	$(MPICC) $(CFLAGS) -o $(BINARY_DIR)/$(MPI_DIR)/$(BIN_MPI)  $(MPI_DIR)/$(KMEANS_MPI).c -lm 
 
-#cuda_kmeans:
+mpi_run:
+	mpirun -np $(NUM_PROCS) $(BINARY_DIR)/$(MPI_DIR)/$(BIN_MPI)
+
+cuda_kmeans: $(CUDA_DIR)/$(KMEANS_CUDA).cu
+	mkdir -p $(BINARY_DIR)/$(CUDA_DIR)
+	$(NVCC) -g -G  $(CUDA_DIR)/$(KMEANS_CUDA).cu -o $(BINARY_DIR)/$(CUDA_DIR)/$(BIN_CUDA) -arch=sm_60
 
 doc: Doxyfile
 	mkdir -p $(DOC_DIR)
