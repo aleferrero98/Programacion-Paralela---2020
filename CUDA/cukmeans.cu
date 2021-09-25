@@ -9,7 +9,7 @@
 #define CANT_ITERACIONES 100
 
 //Funciones CUDA
-__global__ void kMeansClusterAssignment(double* means_dev, double* items_dev, int *clusterAsignado_dev);
+__global__ void kMeansClusterAssignment(double* means_dev, double* items_dev, int *clusterAsignado_dev,int *countChangeItem_dev );
 __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev, double *means_dev, int *d_clust_sizes);
 __device__ u_int64_t Classify(double* means_dev, double* item, int cant_means, int cant_features);
 __device__ double distanciaEuclidiana(double* x , double* y, int length);
@@ -198,7 +198,7 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
 {
     double minPorcentaje;
     //define el porcentaje minimo de cambio de items entre clusters para que continue la ejecucion del algoritmo
-    minPorcentaje = 0.001 * (double) nBloques*hilosB;
+    minPorcentaje = 0.001 * (double) size_lines;
 
     printf("Porentaje minimo = %.2lf\n", minPorcentaje);
 
@@ -210,8 +210,7 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
     //Creo y reseteo a 0 la variable de host
     int *h_clust_sizes = (int*)malloc(CANT_MEANS*sizeof(int));
     memset(h_clust_sizes, 0, sizeof(int)*CANT_MEANS);
-    int *h_clust_sizes_anterior = (int*)malloc(CANT_MEANS*sizeof(int));
-    memset(h_clust_sizes_anterior, 0, sizeof(int)*CANT_MEANS);
+    //cudaMemset(countChangeItem_dev, 0, sizeof(int));
     //Creo la variable de device
     int *d_clust_sizes=0;
     cudaMalloc(&d_clust_sizes,CANT_MEANS*sizeof(float));
@@ -219,14 +218,19 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
     //Copio lo que hay en host a device
     cudaMemcpy(d_clust_sizes,h_clust_sizes,CANT_MEANS*sizeof(int),cudaMemcpyHostToDevice);
     check_CUDA_Error("ERROR en cudaMemcpy d_clust_sizes ");
+    //Almacena contador de cambios de items
+    int *countChangeItem_dev = 0;
+    cudaMalloc(&countChangeItem_dev,sizeof(int));
     
-    int countChangeItem;
+    int *countChangeItem = (int*)malloc(sizeof(int));
 
     //Calcula las medias
     for(int j = 0; j < CANT_ITERACIONES; j++) {
+        
+        printf("Iteracion: %d\n", j);
 
         //En cada iteracion, cantidad de cambios es 0
-        countChangeItem = 0;
+        //memset(countChangeItem, 0, sizeof(int));
                 
         //Paso lo que hay en means a la placa luego de cambiarlo
         cudaMemcpy( means_dev, &means[0][0], CANT_MEANS*CANT_FEATURES*sizeof(double), cudaMemcpyHostToDevice );
@@ -236,7 +240,10 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
         cudaMemset(d_clust_sizes,0,CANT_MEANS*sizeof(int));
         check_CUDA_Error("ERROR en cudaMemset means_dev");
 
-        kMeansClusterAssignment<<<nBloques,hilosB>>>(items_dev, means_dev, clusterAsignado_dev);
+        kMeansClusterAssignment<<<nBloques,hilosB>>>(items_dev, means_dev, clusterAsignado_dev, countChangeItem_dev);
+
+        //Copio las nuevas medias obtenidas en la placa a las medias de Host
+        cudaMemcpy(countChangeItem,countChangeItem_dev,sizeof(int),cudaMemcpyDeviceToHost);
 
         //Reseteo means para la placa, ya que se va a cambiar
         cudaMemset(means_dev,0,CANT_MEANS*CANT_FEATURES*sizeof(double));
@@ -251,7 +258,6 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
         cudaMemcpy(h_clust_sizes, d_clust_sizes, CANT_MEANS*sizeof(int), cudaMemcpyDeviceToHost );
         check_CUDA_Error("ERROR en cudaMemcpy h_clust_sizes ");
 
-        printf("Iteracion: %d\n", j);
         for (int a = 0; a < CANT_MEANS; a++)
         {
             for(int b=0; b < CANT_FEATURES; b++)
@@ -262,23 +268,21 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
             printf("Mean[%d] -> (%lf,%lf,%lf)\n", a, means[a][0], means[a][1],  means[a][2]);
             printf("Cluster[%d] -> %d\n", a, h_clust_sizes[a]);
         }
-
+        
         //Comparo la cantidad de items cambiado en la iteracion actual con la anterior y si es menor al porcentaje
         //se deja de iterar
-        for(int f = 0; f < CANT_MEANS; f++)
-        {
-            countChangeItem = countChangeItem + abs(h_clust_sizes_anterior[f] - h_clust_sizes[f]);
-            h_clust_sizes_anterior[f] = h_clust_sizes[f];
-        }
-        printf("Cant cambios: %d\n",countChangeItem);
-        if(countChangeItem < minPorcentaje){break;}
+        printf("Cant cambios: %d\n",*countChangeItem);
+        if(*countChangeItem < minPorcentaje){break;}
+        //Reseteo cantidad de camios para la placa, ya que se va a cambiar
+        cudaMemset(countChangeItem_dev,0,sizeof(int));
     }
 
     cudaFree(items_dev);
     cudaFree(means_dev);
     cudaFree(d_clust_sizes);
     free(h_clust_sizes);
-    free(h_clust_sizes_anterior);
+    cudaFree(countChangeItem_dev);
+    free(countChangeItem);
     return means;
 }
 /**
@@ -301,8 +305,11 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
 	const int s_idx = threadIdx.x;
 
     //Armo un arreglo de items para cada bloque en memoria compartida
-	__shared__ double items_bloque[HILOS];
-	items_bloque[s_idx]= items_dev[idx*3];
+    __shared__ double items_bloque[HILOS][CANT_FEATURES];
+    const int indx = idx*3;
+    items_bloque[s_idx][0]= items_dev[indx];
+    items_bloque[s_idx][1]= items_dev[indx + 1];
+    items_bloque[s_idx][2]= items_dev[indx + 2];
 
     //Armo un arreglo de los cluster asignados para cada bloque en memoria compartida
 	__shared__ int clusterAsignado_bloque[HILOS];
@@ -314,17 +321,17 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
 	if(s_idx==0)
 	{
         //Creo arreglos de suma de valores del cluster del bloque y la cantidad de items de cada media
-		float clust_sums[CANT_MEANS][CANT_FEATURES]={{0},{0},{0},{0}};
+		double clust_sums[CANT_MEANS][CANT_FEATURES]={{0},{0},{0},{0}};
 		int clust_sizes[CANT_MEANS]={0};
 
         //Se recorre el bloque, incrementando el cluster sizes de acuerdo a la media asignada y lo sumo 
-		for(int j=0; j< blockDim.x; ++j)
+		for(int j=0; j < blockDim.x; ++j)
 		{
             int clust_id = clusterAsignado_bloque[j];
             clust_sizes[clust_id]+=1;
             for(int k = 0; k < CANT_FEATURES; ++k)
             {
-                clust_sums[clust_id][k]+=items_bloque[j+k];
+                clust_sums[clust_id][k]+=items_bloque[j][k];
             }
 		}
 
@@ -349,7 +356,7 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
  * @param means_dev Matriz de medias (Cantidad de Features * Cantidad de Medias), representada como arreglo 1D
  * @param clusterAsignado_dev Arreglo 1D del cluster a que corresponde cada item
  */
-__global__ void kMeansClusterAssignment(double *items_dev, double *means_dev, int *clusterAsignado_dev)
+__global__ void kMeansClusterAssignment(double *items_dev, double *means_dev, int *clusterAsignado_dev,int *countChangeItem_dev )
 {
     
     //Obtengo el ID para cada hilo
@@ -361,8 +368,12 @@ __global__ void kMeansClusterAssignment(double *items_dev, double *means_dev, in
     //Obtengo el item correspondiente a cada hilo
     double *item = &items_dev[idx*3];
 
-    u_int64_t index = Classify(means_dev, item, 4, 3);
+    u_int64_t index = Classify(means_dev, item, CANT_MEANS, CANT_FEATURES);
 
+    if(clusterAsignado_dev[idx] != (int)index)
+    {
+        atomicAdd(countChangeItem_dev,1);
+    }
     //Asigno cada item en un cluster y almaceno el indice de clasificacion en un arreglo
 	clusterAsignado_dev[idx]=(int)index;
 }
