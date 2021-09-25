@@ -212,7 +212,7 @@ double** CalculateMeans(double* items_dev, double** means, u_int64_t size_lines,
     memset(h_clust_sizes, 0, sizeof(int)*CANT_MEANS);
     //cudaMemset(countChangeItem_dev, 0, sizeof(int));
     //Creo la variable de device
-    int *d_clust_sizes=0;
+    int *d_clust_sizes = 0;
     cudaMalloc(&d_clust_sizes,CANT_MEANS*sizeof(float));
     check_CUDA_Error("ERROR en cudaMalloc d_clust_sizes ");
     //Copio lo que hay en host a device
@@ -342,10 +342,11 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
         int indice;
 		for(int z=0; z < CANT_MEANS; ++z)
 		{
-            indice = z*3;
-            atomicAdd(&means_dev[indice],clust_sums[z][0]);
-            atomicAdd(&means_dev[indice+1],clust_sums[z][1]);
-            atomicAdd(&means_dev[indice+2],clust_sums[z][2]);
+            indice = z*CANT_FEATURES;
+            for(int s=0; s < CANT_FEATURES ; s++)
+            {
+                atomicAdd(&means_dev[indice+s],clust_sums[z][s]);
+            }
             atomicAdd(&d_clust_sizes[z],clust_sizes[z]);
         }
 	}
