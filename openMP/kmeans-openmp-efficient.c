@@ -1,13 +1,13 @@
 /**
- * @file kmeans-serie.c
- * @brief Algoritmo Kmeans de clustering, se utiliza para agrupar items con caracteristicas similares.
+ * @file kmeans-openmp-naive.c
+ * @brief  Algoritmo Kmeans de clustering paralelizado con OpenMP.
  * @author Jeremias Agustinoy y Alejandro Ferrero
  * @version 1.0
  * @date 26/05/2021
  */
 
-#include "kmeans-serie.h"
-#include <omp.h> //para la funcion omp_get_wtime
+#include "kmeans-openmp-efficient.h"
+#include <omp.h>
 
 
 int main(void) {
@@ -29,7 +29,7 @@ int main(void) {
     double **means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, size_lines, belongsTo, CANT_FEATURES);
     printf("Duración de CalculateMeans: %f seg\n", omp_get_wtime() - start2);
 
-    start2 = omp_get_wtime();
+    start2 = omp_get_wtime(); 
     clusters = FindClusters(items, belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
     printf("Duración de FindClusters: %f seg\n", omp_get_wtime() - start2);
     
@@ -38,20 +38,16 @@ int main(void) {
         printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
     }
 
-    /*printf("clusters: (%lf,%lf,%lf) - (%lf,%lf,%lf) - (%lf,%lf,%lf) - (%lf,%lf,%lf)\n", 
-                            clusters[0][0][0], clusters[0][0][1], clusters[0][0][2],
-                                clusters[1][0][0], clusters[1][0][1], clusters[1][0][2],
-                                 clusters[2][0][0],  clusters[2][0][1],  clusters[2][0][2],
-                                  clusters[3][0][0],  clusters[3][0][1],  clusters[3][0][2]);*/
-
+    start2 = omp_get_wtime();
     //se libera la memoria del heap
     for(int n = 0; n < CANT_MEANS; n++){
-        for(u_int64_t m = 0; m < size_lines; m++){
-            free(clusters[n][m]);
+    	for(u_int64_t m = 0; m < size_lines; m++){
+	    free(clusters[n][m]);
         } 
         free(clusters[n]);
     }
     free(clusters);
+    printf("Duración free(clusters): %f seg\n", omp_get_wtime() - start2);
 
     free(belongsTo);
     for(int n = 0; n < CANT_MEANS; n++){
@@ -64,11 +60,13 @@ int main(void) {
     free(items);
 
     end = omp_get_wtime(); 
-    printf("\033[1;33m >>> Ejecución algoritmo K-means Serie <<<\033[0;37m \n");
+    printf("\033[1;33m >>> Ejecución algoritmo K-means - OpenMP <<<\033[0;37m \n");
+    printf("%d threads\n", NUM_THREADS);
     printf("Duración total del programa: %f seg\n", end - start);
     
     return EXIT_SUCCESS;
 }
+
 
 double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
 
@@ -78,34 +76,117 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
     double ***clusters = (double ***) malloc(cant_means * sizeof(double**));
     int indices[cant_means]; //contiene la posicion en la que se debe agregar el proximo item al cluster
 
+    double start;
+    start = omp_get_wtime();
+
     for(u_int8_t n = 0; n < cant_means; n++){
         clusters[n] = (double **) malloc(cant_items * sizeof(double*));
         indices[n] = 0;
-        for(u_int64_t m = 0; m < cant_items; m++){
-            clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+        #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_items, cant_features, clusters)
+        { 
+            #pragma omp for schedule(static)
+            for(u_int64_t m = 0; m < cant_items; m++){
+                clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+            }
         }
     }
 
-    for(u_int64_t i = 0; i < cant_items; i++){
-        for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
-            clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+    printf("Duración alloc: %f seg\n", omp_get_wtime() - start);
+
+    start = omp_get_wtime();
+
+    //con critical se obtienen peores resultados
+    #pragma omp parallel num_threads(NUM_THREADS) if(FALSE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
+    {
+        //printf("%d\n", omp_get_thread_num());
+        #pragma omp for schedule(static) ordered
+        for(u_int64_t i = 0; i < cant_items; i++){
+            for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
+                //#pragma omp critical(escritura_cluster)
+                #pragma omp ordered
+                clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+            }
+            //#pragma omp critical(escritura_cluster)
+            #pragma omp ordered
+            indices[belongsTo[i]]++;
         }
-        indices[belongsTo[i]]++;
     }
+
+    printf("Duración insert clusters: %f seg\n", omp_get_wtime() - start);
 
     return clusters;
 }
 
+/*
+double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_items, u_int8_t cant_means, u_int8_t cant_features){
+
+    // clusters es un array de 3 dimensiones, es un conjunto de clusters.
+    // cada cluster es un conjunto de items.
+    // cada item es un conjunto de features.
+    double ***clusters = (double ***) malloc(cant_means * sizeof(double**));
+
+    double start;
+    start = omp_get_wtime();
+
+    for(u_int8_t n = 0; n < cant_means; n++){
+        clusters[n] = (double **) malloc(cant_items * sizeof(double*));
+        #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_items, cant_features, clusters)
+        { 
+            #pragma omp for schedule(static)
+            for(u_int64_t m = 0; m < cant_items; m++){
+                clusters[n][m] = (double *) malloc(cant_features * sizeof(double));
+            }
+        }
+    }
+
+    int *pos = calloc(cant_means, sizeof(int));
+
+    printf("Duración alloc: %f seg\n", omp_get_wtime() - start);
+    start = omp_get_wtime();
+
+    #pragma omp parallel num_threads(NUM_THREADS) if(cant_items > CANT_MIN_ITEMS) shared(cant_means, cant_items, cant_features, belongsTo, clusters, items, pos) default(none)
+    {
+        double ***clusters_thread = (double ***) malloc(cant_means * sizeof(double**));
+        int indices[cant_means]; //contiene la posicion en la que se debe agregar el proximo item al cluster
+        for(u_int8_t n = 0; n < cant_means; n++){
+            clusters_thread[n] = (double **) malloc(cant_items * sizeof(double*));
+            indices[n] = 0;
+        }
+
+        #pragma omp for schedule(static) 
+        for(u_int64_t i = 0; i < cant_items; i++){
+            //se asigna memoria para el item en el cluster que se va a agregar
+            clusters_thread[belongsTo[i]][indices[belongsTo[i]]] = (double *) malloc(cant_features * sizeof(double));
+
+            for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
+                clusters_thread[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
+            }
+            indices[belongsTo[i]]++;
+        }
+
+        //cada hilo agrega los items que clasificó al final
+        #pragma omp critical
+        {
+            for(u_int8_t mm = 0; mm < cant_means; mm++){
+                clusters[mm][pos[mm]] = clusters_thread[mm][0];
+                pos[mm] = indices[mm];
+            }
+        }
+    }//fin parallel
+    free(pos);
+
+    printf("Duración insert clusters: %f seg\n", omp_get_wtime() - start);
+
+    return clusters;
+}
+*/
+
 double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iterations, u_int64_t size_lines, u_int64_t* belongsTo, u_int8_t cant_features){
     //Encuentra el minimo y maximo de cada columna (o feature)
     double *cMin, *cMax;
-    double start;
-
     cMin = (double*) malloc(cant_features * sizeof(double));
     cMax = (double*) malloc(cant_features * sizeof(double));
-    start = omp_get_wtime();
     searchMinMax(items, size_lines, cMin, cMax, cant_features);
-    printf("Duración de searchMinMax: %f seg\n", omp_get_wtime() - start);
 
     //define el porcentaje minimo de cambio de items entre clusters para que continue la ejecucion del algoritmo
     double minPorcentaje = 0.001 * (double) size_lines;
@@ -114,17 +195,16 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
     int noChange, j;
     double *item;
     u_int64_t index;
-
-    start = omp_get_wtime();
+    
     //Inicializa las means (medias) con valores estimativos
     double** means = InitializeMeans(cant_means, cMin, cMax, cant_features);
-    printf("Duración de InitializeMeans: %f seg\n\n", omp_get_wtime() - start);
 
     //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
-    u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
+    u_int64_t *clusterSizes = calloc(cant_means, sizeof(u_int64_t));
+    //u_int64_t clusterSizes[cant_means];
 
     //guarda las suma de los valores de los items de cada cluster para despues calcular el promedio
-    double sumas_items[cant_means][cant_features]; 
+    double sumas_items[cant_means][cant_features];
 
     //Calcula las medias
     for(j = 0; j < cant_iterations; j++) {
@@ -137,29 +217,62 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         memset(clusterSizes, 0, sizeof(u_int64_t)*cant_means);
         memset(sumas_items, 0, sizeof(double)*cant_means*cant_features);
 
-        for(u_int64_t k = 0; k < size_lines; k++) { //se recorren todos los items
-            item = items[k];
+        int thread_id = 0;
 
-            //Clasifica item dentro de un cluster y actualiza las medias correspondientes
-            index = Classify(means, item, cant_means, cant_features);
+        //se paraleliza solo si la cantidad de items es lo suficientemente grande como para hacerlo
+        #pragma omp parallel num_threads(NUM_THREADS) if(size_lines > CANT_MIN_ITEMS) firstprivate(cant_means, cant_features, size_lines) private(index, item, thread_id) shared(items, belongsTo, noChange, countChangeItem, clusterSizes, sumas_items, means) default(none)
+        {       
+            thread_id = omp_get_thread_num();
+            //printf("Thread %d\n", thread_id); 
+            
+            //guarda las suma de los valores de los items de cada cluster para despues calcular el promedio (cada thread tiene uno privado)
+            double sumas_items_thread[cant_means][cant_features];
+            memset(sumas_items_thread, 0, sizeof(double)*cant_means*cant_features);
 
-            clusterSizes[index] += 1;
-            //cSize = clusterSizes[index]; //cant de items del cluster
-            //updateMean(means[index], item, cSize, cant_features);
+            //guarda la cantidad de items que se asigno a cada cluster (1 por thread)
+            u_int64_t clusterSizes_thread[cant_means]; //privado a cada hilo
+            memset(clusterSizes_thread, 0, sizeof(u_int64_t)*cant_means);
 
-            //agrego el valor del item a la suma acumulada del cluster seleccionado
-            for(int f = 0; f < cant_features; f++){
-                sumas_items[index][f] += item[f];
+        
+            #pragma omp for schedule(static) nowait
+            for(u_int64_t k = 0; k < size_lines; k++){ //se recorren todos los items
+                item = items[k];
+
+                //Clasifica item dentro de un cluster y actualiza las medias correspondientes
+                index = Classify(means, item, cant_means, cant_features);
+
+                clusterSizes_thread[index] += 1;
+                
+                //agrego el valor del item a la suma acumulada del cluster seleccionado                   
+                for(int f = 0; f < cant_features; f++){
+                    sumas_items_thread[index][f] += item[f];
+                }
+
+                //si el Item cambio de cluster
+                if(index != belongsTo[k]){
+                    #pragma omp atomic write
+                        noChange = FALSE;
+
+                    #pragma omp atomic
+                        countChangeItem++;
+
+                    belongsTo[k] = index;
+                }
+
+            } //NO HAY BARRERA
+
+            //cada hilo calcula la suma de los elementos de cada cluster(sumas_items_thread) 
+            //y la cantidad de items en cada cluster(clusterSizes_thread) para calcular despues las medias globales
+            for(int m = 0; m < cant_means; m++){
+                #pragma omp atomic
+                clusterSizes[m] += clusterSizes_thread[m];
+                
+                for(int f = 0; f < cant_features; f++){
+                    #pragma omp atomic
+                    sumas_items[m][f] += sumas_items_thread[m][f];
+                }
             }
-
-            //si el Item cambio de cluster
-            if(index != belongsTo[k]){
-                noChange = FALSE;
-                countChangeItem++;
-                belongsTo[k] = index;
-            }
-
-        }
+        } //fin parallel
 
         //calcula las nuevas medias dividiendo las sumas acumuladas por la cantidad de cada cluster
         for(int m = 0; m < cant_means; m++){
@@ -170,21 +283,17 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
             }
         }
 
-        printf("Iteracion %d\n", j);
-        /*
+        /*printf("Iteracion %d\n", j);
         for(int i = 0; i < cant_means; i++){
             printf("Mean[%d] -> (%lf,%lf,%lf)\n", i, means[i][0], means[i][1], means[i][2]);
         }*/
-        /*
-        for (int m = 0; m < cantMeans; ++m) {
-            printf("Cluster[%d]: %lu\n", m, clusterSizes[m]);
-        }*/
 
         //printf("countChangeItem: %lu - minPorcentaje: %lf\n",countChangeItem, minPorcentaje);
-        //if(noChange){ 
         if(noChange || (countChangeItem < minPorcentaje)){
+        //if(noChange){
             break;
         }
+
     }
 
     printf("\n>>> Cantidad de items en cada cluster <<<\n");
@@ -237,7 +346,6 @@ void updateMean(double* mean, double* item, u_int64_t cant_items, u_int8_t cant_
         mean[i] = round(m); //se redondea a 3 cifras decimales
     } 
 }
-
 
 double round(double var){
     double value = (int)(var * 1000 + .5);
@@ -309,6 +417,7 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
     free(jump);
     return means;
 }
+
 
 // PODRIAMOS HACER QUE CALCULE LA CANTIDAD DE FEATURES TAMBIEN
 
