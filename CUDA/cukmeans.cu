@@ -7,6 +7,7 @@
 #define CANT_FEATURES 3
 #define CANT_MEANS 4
 #define CANT_ITERACIONES 100
+#define MAX_DOUBLE DBL_MAX
 
 //Funciones CUDA
 __global__ void kMeansClusterAssignment(double* means_dev, double* items_dev, int *clusterAsignado_dev,int *countChangeItem_dev );
@@ -25,7 +26,6 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
 __host__ void check_CUDA_Error(const char *mensaje);
 
 //Constantes de CUDA
-__constant__ double MAX_DOUBLE;
 __constant__ u_int64_t CANT_ITEMS_CUDA;
 
 int main()
@@ -46,9 +46,9 @@ int main()
     cudaMemcpyToSymbol(CANT_ITEMS_CUDA, &size_lines, sizeof(u_int64_t));
     check_CUDA_Error("ERROR en cudaMemcpyToSymbol");
 
-    double maxDouble = DBL_MAX;
-    cudaMemcpyToSymbol(MAX_DOUBLE, &maxDouble, sizeof(double));
-    check_CUDA_Error("ERROR en cudaMemcpyToSymbol");
+    // double maxDouble = DBL_MAX;
+    // cudaMemcpyToSymbol(MAX_DOUBLE, &maxDouble, sizeof(double));
+    // check_CUDA_Error("ERROR en cudaMemcpyToSymbol");
 
     double **items = ReadData(PATH, size_lines, CANT_FEATURES);
     //Marca de final CalcLines y ReadData
@@ -306,10 +306,10 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
 
     //Armo un arreglo de items para cada bloque en memoria compartida
     __shared__ double items_bloque[HILOS][CANT_FEATURES];
-    const int indx = idx*3;
-    items_bloque[s_idx][0]= items_dev[indx];
-    items_bloque[s_idx][1]= items_dev[indx + 1];
-    items_bloque[s_idx][2]= items_dev[indx + 2];
+
+    for(int i = 0; i < CANT_FEATURES; i++){
+        items_bloque[s_idx][i] = items_dev[idx*CANT_FEATURES + i];
+    }
 
     //Armo un arreglo de los cluster asignados para cada bloque en memoria compartida
 	__shared__ int clusterAsignado_bloque[HILOS];
@@ -320,12 +320,14 @@ __global__ void kMeansCentroidUpdate(double *items_dev, int *clusterAsignado_dev
     //Si es el hilo 0 de cada bloque, entonces suma los valores dentro de los arreglo compartido
 	if(s_idx==0)
 	{
+        int limite = ((idx + blockDim.x) < CANT_ITEMS_CUDA)? blockDim.x : (CANT_ITEMS_CUDA - idx);
+
         //Creo arreglos de suma de valores del cluster del bloque y la cantidad de items de cada media
 		double clust_sums[CANT_MEANS][CANT_FEATURES]={{0},{0},{0},{0}};
-		int clust_sizes[CANT_MEANS]={0};
+        int clust_sizes[CANT_MEANS]={0};
 
         //Se recorre el bloque, incrementando el cluster sizes de acuerdo a la media asignada y lo sumo 
-		for(int j=0; j < blockDim.x; ++j)
+		for(int j=0; j < limite; ++j)
 		{
             int clust_id = clusterAsignado_bloque[j];
             clust_sizes[clust_id]+=1;
@@ -366,7 +368,7 @@ __global__ void kMeansClusterAssignment(double *items_dev, double *means_dev, in
 	if (idx >= CANT_ITEMS_CUDA) return;
     
     //Obtengo el item correspondiente a cada hilo
-    double *item = &items_dev[idx*3];
+    double *item = &items_dev[idx*CANT_FEATURES];
 
     u_int64_t index = Classify(means_dev, item, CANT_MEANS, CANT_FEATURES);
 
@@ -393,7 +395,7 @@ __device__ u_int64_t Classify(double* means_dev, double* item, int cant_means, i
     for(int i = 0; i < cant_means; i++){
         //calcula la distancia de un item a la media
         //printf("Means_dev: %ld\n", means_dev[i*3]);
-        distance = distanciaEuclidiana(item, &means_dev[i*3], cant_features);
+        distance = distanciaEuclidiana(item, &means_dev[i*cant_features], cant_features);
         if(distance < minimun){
             minimun = distance;
             index = i;
