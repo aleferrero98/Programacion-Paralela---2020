@@ -58,6 +58,10 @@ cuda_kmeans: $(CUDA_DIR)/$(KMEANS_CUDA).cu
 	mkdir -p $(BINARY_DIR)/$(CUDA_DIR)
 	$(NVCC) -g -G  $(CUDA_DIR)/$(KMEANS_CUDA).cu -o $(BINARY_DIR)/$(CUDA_DIR)/$(BIN_CUDA) -arch=sm_60
 
+cuda_kmeans_eficiente: $(CUDA_DIR)/$(KMEANS_CUDA)Eficiente.cu
+	mkdir -p $(BINARY_DIR)/$(CUDA_DIR)
+	$(NVCC) -g -G  $(CUDA_DIR)/$(KMEANS_CUDA)Eficiente.cu -o $(BINARY_DIR)/$(CUDA_DIR)/$(BIN_CUDA)_eficiente -arch=sm_60
+
 doc: Doxyfile
 	mkdir -p $(DOC_DIR)
 	doxygen
