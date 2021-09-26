@@ -102,10 +102,6 @@ int main(int argc, char* argv[]) {
     MPI_Gather(belongsTo, (int)cant_items_proc, MPI_UINT64_T, all_belongsTo, (int)cant_items_proc, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
     if(rank == 0){ //solo el proceso 0 realiza el FindClusters
-       
-      //  printf("belongss: %lu, %lu, %lu | %lu, %lu, %lu\n", all_belongsTo[999999],all_belongsTo[999998],all_belongsTo[999997], belongsTo[999999], belongsTo[999998],belongsTo[999997]);
-
-       // printf("all_belongsTo: %lu, %lu\n", all_belongsTo[0], all_belongsTo[999999]);
         start2 = MPI_Wtime();
         clusters = FindClusters(all_items, all_belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
         printf("Duración de FindClusters: %f seg\n", MPI_Wtime() - start2);
@@ -289,7 +285,7 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
     }
 
     //envia las medias a los otros procesos
-    MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     if(rank == 0){
         printf("\n>>> Cantidad de items en cada cluster <<<\n");
