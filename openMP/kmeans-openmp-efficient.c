@@ -1,5 +1,5 @@
 /**
- * @file kmeans-openmp-naive.c
+ * @file kmeans-openmp-efficient.c
  * @brief  Algoritmo Kmeans de clustering paralelizado con OpenMP.
  * @author Jeremias Agustinoy y Alejandro Ferrero
  * @version 1.0
@@ -95,22 +95,14 @@ double*** FindClusters(double** items, u_int64_t* belongsTo, u_int64_t cant_item
 
     start = omp_get_wtime();
 
-    //con critical se obtienen peores resultados
-    #pragma omp parallel num_threads(NUM_THREADS) if(FALSE) shared(cant_items, cant_features, belongsTo, clusters, items, indices) default(none)
-    {
-        //printf("%d\n", omp_get_thread_num());
-        #pragma omp for schedule(static) ordered
-        for(u_int64_t i = 0; i < cant_items; i++){
-            for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
-                //#pragma omp critical(escritura_cluster)
-                #pragma omp ordered
-                clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
-            }
-            //#pragma omp critical(escritura_cluster)
-            #pragma omp ordered
-            indices[belongsTo[i]]++;
+    for(u_int64_t i = 0; i < cant_items; i++){
+        for(u_int8_t j = 0; j < cant_features; j++){ //se cargan todas las features del item al cluster
+            clusters[belongsTo[i]][indices[belongsTo[i]]][j] = items[i][j];
         }
+
+        indices[belongsTo[i]]++;
     }
+    
 
     printf("Duración insert clusters: %f seg\n", omp_get_wtime() - start);
 

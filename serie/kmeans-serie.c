@@ -181,7 +181,7 @@ double** CalculateMeans(u_int16_t cant_means, double** items, int cant_iteration
         }*/
 
         //printf("countChangeItem: %lu - minPorcentaje: %lf\n",countChangeItem, minPorcentaje);
-        //if(noChange){ 
+
         if(noChange || (countChangeItem < minPorcentaje)){
             break;
         }
@@ -309,8 +309,6 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
     free(jump);
     return means;
 }
-
-// PODRIAMOS HACER QUE CALCULE LA CANTIDAD DE FEATURES TAMBIEN
 
 u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]) {
     FILE *f = fopen(filename, "r");

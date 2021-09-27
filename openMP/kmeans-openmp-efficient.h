@@ -1,5 +1,5 @@
 /**
- * @file 
+ * @file kmeans-openmp-efficient.h
  * @brief 
  * @author Jeremias Agustinoy y Alejandro Ferrero
  * @version 1.0

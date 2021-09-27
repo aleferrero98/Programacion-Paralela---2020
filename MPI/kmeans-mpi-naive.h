@@ -17,10 +17,8 @@
 #include <float.h>
 
 //#define PATH "./inputs/movisA.csv"
-//#define PATH "./inputs/movisB.csv"
 //#define PATH "./inputs/randomData_5M_3feature.csv"
-//#define PATH "./inputs/randomData_1M_3feature.csv"
-#define PATH "./inputs/randomData_2M_3feature.csv"
+#define PATH "./inputs/randomData_3M_3feature.csv"
 
 #define TRUE 1
 #define FALSE 0
@@ -117,7 +115,7 @@ u_int64_t Classify(double* means, double* item, int cant_means, int cant_feature
  * @param cant_features cantidad de caracteristicas de los items.
  * @return arreglo de medias de todos los clusters.
  */
-double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means);
+double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means, u_int64_t size_lines);
 
 /**
  * @brief Crea una lista de clusters, donde cada cluster es a su vez un arreglo que contiene 

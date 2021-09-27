@@ -6,7 +6,13 @@
  * @date 26/05/2021
  */
 
-#include "kmeans-mpi.h"
+/**
+ * En este caso se deben tener una cantidad de procesos igual 4 (cantidad de medias), ya que 
+ * cada proceso (del 0 al 3) va a actualizar una media en cada iteracion (el proc 0 con la media 0, proc 1 con 
+ * media 1, etc.)
+ */
+
+#include "kmeans-mpi-naive.h"
 #include "mpi.h"
 
 
@@ -27,7 +33,13 @@ int main(int argc, char* argv[]) {
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
-    printf("num tasks: %d\n", num_tasks);
+    printf("rank: %d | num tasks: %d\n", rank, num_tasks);
+
+    if(num_tasks != CANT_MEANS){
+        printf("La cantidad de procesos debe ser igual a %d\n", CANT_MEANS);
+        MPI_Finalize();
+        return EXIT_FAILURE;
+    }
 
     //el proceso con rango 0 es el que lee y distribuye los datos    
     if(rank == 0){ 
@@ -90,7 +102,7 @@ int main(int argc, char* argv[]) {
     //-----------------------------------
     
     start2 = MPI_Wtime(); 
-    means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, cant_items_proc, belongsTo, CANT_FEATURES, means);
+    means = CalculateMeans(CANT_MEANS, items, CANT_ITERACIONES, cant_items_proc, belongsTo, CANT_FEATURES, means, size_lines);
     if(rank == 0) printf("\nDuración de CalculateMeans: %f seg\n", MPI_Wtime() - start2);
     
     //se crea vector all_belongsTo que contiene los belongTo de todos los procesos
@@ -102,10 +114,6 @@ int main(int argc, char* argv[]) {
     MPI_Gather(belongsTo, (int)cant_items_proc, MPI_UINT64_T, all_belongsTo, (int)cant_items_proc, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
     if(rank == 0){ //solo el proceso 0 realiza el FindClusters
-       
-      //  printf("belongss: %lu, %lu, %lu | %lu, %lu, %lu\n", all_belongsTo[999999],all_belongsTo[999998],all_belongsTo[999997], belongsTo[999999], belongsTo[999998],belongsTo[999997]);
-
-       // printf("all_belongsTo: %lu, %lu\n", all_belongsTo[0], all_belongsTo[999999]);
         start2 = MPI_Wtime();
         clusters = FindClusters(all_items, all_belongsTo, size_lines, CANT_MEANS, CANT_FEATURES);
         printf("Duración de FindClusters: %f seg\n", MPI_Wtime() - start2);
@@ -186,8 +194,7 @@ double*** FindClusters(double* items, u_int64_t* belongsTo, u_int64_t cant_items
     return clusters;
 }
 
-double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means){
-   // double *cMin, *cMax;
+double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations, u_int64_t cant_items_proc, u_int64_t* belongsTo, u_int8_t cant_features, double* means, u_int64_t size_lines){
     int rank, num_tasks;
     int noChange, all_noChange, j;
     double *item;
@@ -199,16 +206,17 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
     MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
 
     //define el porcentaje minimo de cambio de items entre clusters para que continue la ejecucion del algoritmo
-    minPorcentaje = 0.001 * (double) cant_items_proc*num_tasks;
+    minPorcentaje = 0.001 * (double) size_lines;
     //printf("min porcentaje: %lf", minPorcentaje);
-    
-    //Inicializa los clusters, clusterSizes almacena el numero de items de cada cluster
-    u_int64_t* clusterSizes = calloc(cant_means, sizeof(u_int64_t));
-    u_int64_t* all_clusterSizes = calloc(cant_means, sizeof(u_int64_t));
 
-    //guarda las suma de los valores de los items de cada cluster para despues calcular el promedio
-    double sumas_items[cant_means][cant_features]; 
-    double all_sumas_items[cant_means][cant_features];
+    double media[cant_features]; //solo util para los 4 procesos que calculan las medias
+    u_int64_t clusterSizes;
+    double suma_items[cant_features];
+    double *items_recv = (double *) malloc(cant_items_proc * cant_features * sizeof(double)); //arreglo temporal de items
+    u_int64_t *belongsTo_recv = malloc(cant_items_proc * sizeof(u_int64_t)); //arreglo temporal de belongsTo
+    
+    //clusterSizes almacena el numero de items de cada cluster
+    u_int64_t* all_clusterSizes = calloc(cant_means, sizeof(u_int64_t)); //para el proc 0
 
     //Calcula las medias
     for(j = 0; j < cant_iterations; j++) {
@@ -216,12 +224,6 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
         //Si no ocurrio un cambio en el cluster, se detiene
         noChange = TRUE;
         countChangeItem = 0;
-
-        //Resetea el clusterSizes a 0 para cada una de las medias
-        memset(clusterSizes, 0, sizeof(u_int64_t)*cant_means);
-        memset(sumas_items, 0, sizeof(double)*cant_means*cant_features);
-
-        //printf("ANTES ENVIO MEANS\n");
         
         //envia las medias a los otros procesos
         MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -229,16 +231,8 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
         for(u_int64_t k = 0; k < cant_items_proc; k++) { //cada proceso recorre sus items
             item = &(items[k*cant_features]);
 
-            //Clasifica item dentro de un cluster y actualiza las medias correspondientes
+            //Clasifica item dentro de un cluster
             index = Classify(means, item, cant_means, cant_features);
-           // printf("INDEX %d \n", index);
-            clusterSizes[index] += 1;
-
-            //agrego el valor del item a la suma acumulada del cluster seleccionado
-            for(int f = 0; f < cant_features; f++){
-                sumas_items[index][f] += item[f];
-            }
-
             //si el Item cambio de cluster
             if(index != belongsTo[k]){
                 noChange = FALSE;
@@ -247,23 +241,38 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
             }
 
         } //termina de clasificar a todos los items
-        //se deben actualizar las medias globales de todos los procesos, para eso se hace una reduccion de las sumas y 
-        //de la cantidad de items en cada cluster, y luego el proceso 0 calcular todas las medias globales
-        //printf("FIN ITERACION\n");
+        //se deben actualizar las medias globales de todos los procesos
+        
+        clusterSizes = 0;
+        memset(suma_items, 0, sizeof(double)*cant_features);
 
-        MPI_Reduce(sumas_items, all_sumas_items, cant_means*cant_features, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        MPI_Reduce(clusterSizes, all_clusterSizes, cant_means, MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+        for(int p = 0; p < cant_means; p++){
+            //cada proceso en su turno envia sus items y su arreglo belongsTo a los restantes procesos para que actualicen las medias
+            if(rank == p){
+                memcpy(items_recv, items, cant_items_proc * cant_features * sizeof(double));
+                memcpy(belongsTo_recv, belongsTo, cant_items_proc * sizeof(u_int64_t));
+            }
+            //se envia la porcion de items y la porcion de belongsTo de un proceso por vez
+            //es importante que todos los procesos procesen la misma cantidad de items
+            MPI_Bcast(items_recv, (int) cant_items_proc * cant_features, MPI_DOUBLE, p, MPI_COMM_WORLD);
+            MPI_Bcast(belongsTo_recv, (int) cant_items_proc, MPI_UINT64_T, p, MPI_COMM_WORLD);
 
-        if(rank == 0){
-            //calcula las nuevas medias dividiendo las sumas acumuladas por la cantidad de cada cluster
-            for(int m = 0; m < cant_means; m++){
-                if(all_clusterSizes[m] == 0) continue; //para evitar divisiones por cero, la media queda en el valor anterior
-
-                for(int f = 0; f < cant_features; f++){
-                    means[m*cant_features + f] = all_sumas_items[m][f] / (double)all_clusterSizes[m];
+            for(u_int64_t i = 0; i < cant_items_proc; i++){
+                if((int) belongsTo_recv[i] == rank){ //toma solo los de su cluster
+                    clusterSizes++;
+                    for(u_int16_t f = 0; f < cant_features; f++){
+                        suma_items[f] += items_recv[i*cant_features + f];
+                    }
                 }
             }
         }
+        if(clusterSizes != 0){
+            for(int f = 0; f < cant_features; f++){
+                media[f] = suma_items[f] / (double)clusterSizes;
+            }
+        } //en este punto ya estan calculadas las medias
+        //el proc 0 recibe las medias actualizadas de cada cluster del proceso que la calculó
+        MPI_Gather(media, cant_features, MPI_DOUBLE, means, cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD); 
 
         if(rank == 0){
             printf("Iteracion %d\n", j);
@@ -286,9 +295,8 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
             break;
         }
     }
-
-    //envia las medias a los otros procesos
-    MPI_Bcast(means, cant_means*cant_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    // se recibe la cantidad de items de cada cluster
+    MPI_Gather(&clusterSizes, 1, MPI_UINT64_T, all_clusterSizes, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD); 
 
     if(rank == 0){
         printf("\n>>> Cantidad de items en cada cluster <<<\n");
@@ -298,8 +306,9 @@ double* CalculateMeans(u_int16_t cant_means, double* items, int cant_iterations,
         printf("Cantidad de iteraciones: %d\n", j);
     }
 
-    free(clusterSizes);
     free(all_clusterSizes);
+    free(items_recv);
+    free(belongsTo_recv);
 
     return means;
 }
