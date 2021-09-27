@@ -411,8 +411,6 @@ double** InitializeMeans(u_int16_t cant_means, double* cMin, double* cMax, u_int
 }
 
 
-// PODRIAMOS HACER QUE CALCULE LA CANTIDAD DE FEATURES TAMBIEN
-
 u_int64_t CalcLines(char filename[TAM_MAX_FILENAME]) {
     FILE *f = fopen(filename, "r");
     u_int64_t cant_lines = 0; 

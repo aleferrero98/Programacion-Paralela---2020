@@ -14,7 +14,7 @@ Para realizar el trabajo práctico se partió implementando en lenguaje C el alg
 				Asignar el item a la media
 		Actualizar todas las medias con los valores de los items que se encuentran asociadas a cada una de ellas.
 
-En realidad, nuestro psudocódigo es el que aparece en sitios como https://www.unioviedo.es/compnum/laboratorios_py/kmeans/kmeans.html o https://es.coursera.org/lecture/mineria-de-datos-introduccion/ejemplo-algoritmo-k-means-d0fgs
+Nuestro psudocódigo es el que aparece en sitios como https://www.unioviedo.es/compnum/laboratorios_py/kmeans/kmeans.html o https://es.coursera.org/lecture/mineria-de-datos-introduccion/ejemplo-algoritmo-k-means-d0fgs y permite una mejor paralelización del algoritmo sin modificar los resultados.
 
 Como datos de entrada se generaron aleatoriamente más de 1 millón de items con 3 features (o características) cada uno, para agregarle más complejidad a la parte paralela y así notar los cambios cuando sea paralelizado. Cada linea del archivo csv es un item y sus features están separadas por comas. Cabe aclarar que el código fue desarrollado para que funcione con otras cantidades de items y features también.
 
