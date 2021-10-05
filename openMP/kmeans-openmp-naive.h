@@ -17,8 +17,8 @@
 #include <float.h>
 
 //#define PATH "./inputs/movisA.csv"
-//#define PATH "./inputs/randomData_2M_3feature.csv"
-#define PATH "./inputs/randomData_5M_3feature.csv"
+#define PATH "./inputs/randomData_2M_3feature.csv"
+//#define PATH "./inputs/randomData_5M_3feature.csv"
 
 #define TRUE 1
 #define FALSE 0
